@@ -221,6 +221,7 @@ input{flex:1;min-width:220px}button{cursor:pointer;background:#087eb7;border-col
 <select id="system" onchange="filterGames()"><option value="">All systems</option></select>
 <select id="genre" onchange="filterGames()"><option value="">All genres</option></select>
 <select id="cabinet"><option value="">Choose cabinet…</option></select>
+<button id="test-cabinet" type="button">TEST CONNECTION</button>
 </div>
 <div class="muted" id="summary">Loading game list…</div>
 <div id="job" class="job"></div>
@@ -239,6 +240,7 @@ async function init(){
  const c=await fetch('/api/cabinets'); cabinets=(await c.json()).cabinets||[];
  const cabinetSelect=document.getElementById('cabinet');
  cabinets.forEach(cabinet=>{const o=document.createElement('option');o.value=cabinet.id;o.textContent=cabinet.name+' ('+cabinet.ip+')';cabinetSelect.appendChild(o)});
+ document.getElementById('test-cabinet').addEventListener('click',testCabinet);
  filterGames();
 }
 function filterGames(){
@@ -250,6 +252,16 @@ function filterGames(){
   return '<article class="card"><div class="art">'+art+'</div><div class="info"><div class="name">'+esc(x.name)+'</div><div class="meta">'+esc(x.system)+' · '+esc(x.year)+' · '+esc(x.genre)+'</div><button data-rom="'+encodeURIComponent(x.filename)+'" '+(cabinets.length?'':'disabled')+'>LOAD GAME</button></div></article>';
  }).join('');
  document.querySelectorAll('[data-rom]').forEach(button=>button.addEventListener('click',()=>launchGame(button.dataset.rom)));
+}
+async function testCabinet(){
+ const cabinetId=document.getElementById('cabinet').value;
+ const panel=document.getElementById('job');
+ if(!cabinetId){panel.textContent='Choose a cabinet first.';return}
+ panel.textContent='Testing NetDIMM connection…';
+ const response=await fetch('/api/cabinets/'+encodeURIComponent(cabinetId)+'/test',{method:'POST'});
+ const result=await response.json();
+ panel.textContent=result.message||'Connection test finished.';
+ panel.className='job '+(result.ok?'good':'bad');
 }
 async function launchGame(encoded){
  const filename=decodeURIComponent(encoded);
@@ -302,6 +314,24 @@ def artwork(filename: str):
         if (candidate / filename).is_file():
             return send_from_directory(candidate, filename)
     abort(404)
+
+
+@app.post("/api/cabinets/<cabinet_id>/test")
+def api_test_cabinet(cabinet_id: str):
+    selected = next((cabinet for cabinet in cabinets() if cabinet["id"] == cabinet_id), None)
+    if selected is None:
+        return jsonify(ok=False, message="Select a configured cabinet."), 400
+    try:
+        dimm = NetDimm(
+            selected["ip"],
+            version=enum_value(NetDimmVersionEnum, selected["firmware"]),
+            target=enum_value(NetDimmTargetEnum, selected["target"]),
+        )
+        dimm.info()
+        return jsonify(ok=True, message=f"NetDIMM at {selected['ip']} responded.")
+    except Exception as exc:
+        LOG.warning("NetDIMM connection test failed for %s: %s", selected["name"], exc)
+        return jsonify(ok=False, message=f"Could not reach {selected['name']}: {exc}"), 502
 
 
 @app.post("/api/load")
