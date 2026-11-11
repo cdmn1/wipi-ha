@@ -196,6 +196,7 @@ input{flex:1;min-width:220px}button{cursor:pointer;background:#087eb7;border-col
 <input id="search" placeholder="Search games..." oninput="filterGames()">
 <select id="system" onchange="filterGames()"><option value="">All systems</option></select>
 <select id="genre" onchange="filterGames()"><option value="">All genres</option></select>
+<select id="cabinet"><option value="">Choose cabinet…</option></select>
 </div>
 <div class="muted" id="summary">Loading game list…</div>
 <div id="job" class="job"></div>
@@ -212,22 +213,27 @@ async function init(){
  const genres=[...new Set(games.map(g=>g.genre).filter(Boolean))].sort();
  for(const pair of [['system',systems],['genre',genres]]) for(const v of pair[1]){const o=document.createElement('option');o.value=v;o.textContent=v;document.getElementById(pair[0]).appendChild(o)}
  const c=await fetch('/api/cabinets'); cabinets=(await c.json()).cabinets||[];
+ const cabinetSelect=document.getElementById('cabinet');
+ cabinets.forEach(cabinet=>{const o=document.createElement('option');o.value=cabinet.id;o.textContent=cabinet.name+' ('+cabinet.ip+')';cabinetSelect.appendChild(o)});
  filterGames();
 }
 function filterGames(){
  const q=document.getElementById('search').value.toLowerCase(),s=document.getElementById('system').value,g=document.getElementById('genre').value;
  const shown=games.filter(x=>(!q||(x.name+' '+x.filename+' '+x.manufacturer).toLowerCase().includes(q))&&(!s||x.system===s)&&(!g||x.genre===g));
  document.getElementById('summary').textContent=String(shown.length)+' of '+String(games.length)+' games';
- document.getElementById('games').innerHTML=shown.map(x=>'<article class="card"><div class="art">'+(x.image?'<img loading="lazy" src="/art/'+encodeURIComponent(x.image)+'" onerror="this.remove()">':'NAOMI')+'</div><div class="info"><div class="name">'+esc(x.name)+'</div><div class="meta">'+esc(x.system)+' · '+esc(x.year)+' · '+esc(x.genre)+'</div><button '+(cabinets.length?'':'disabled')+' onclick="chooseCabinet(\\''+encodeURIComponent(x.filename)+'\\')">LOAD GAME</button></div></article>').join('');
+ document.getElementById('games').innerHTML=shown.map(x=>{
+  const art=x.image?'<img loading="lazy" src="/art/'+encodeURIComponent(x.image)+'" onerror="this.remove()">':'NAOMI';
+  return '<article class="card"><div class="art">'+art+'</div><div class="info"><div class="name">'+esc(x.name)+'</div><div class="meta">'+esc(x.system)+' · '+esc(x.year)+' · '+esc(x.genre)+'</div><button data-rom="'+encodeURIComponent(x.filename)+'" '+(cabinets.length?'':'disabled')+'>LOAD GAME</button></div></article>';
+ }).join('');
+ document.querySelectorAll('[data-rom]').forEach(button=>button.addEventListener('click',()=>launchGame(button.dataset.rom)));
 }
-async function chooseCabinet(encoded){
+async function launchGame(encoded){
  const filename=decodeURIComponent(encoded);
- if(!cabinets.length){document.getElementById('job').textContent='No cabinets configured. Add entries in the app Configuration tab.';return}
- const choice=prompt('Enter cabinet number:\\n'+cabinets.map((c,i)=>String(i+1)+'. '+c.name+' ('+c.ip+')').join('\\n'),'1');
- const index=Number(choice)-1;if(!Number.isInteger(index)||!cabinets[index])return;
- const r=await fetch('/api/load',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({filename:filename,cabinet_id:cabinets[index].id})});
- const d=await r.json();document.getElementById('job').textContent=d.message||d.error||'Request submitted';
- if(d.job_id) watchJob(d.job_id);
+ const cabinetId=document.getElementById('cabinet').value;
+ if(!cabinetId){document.getElementById('job').textContent='Choose a cabinet first.';return}
+ const r=await fetch('/api/load',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({filename:filename,cabinet_id:cabinetId})});
+ const result=await r.json();document.getElementById('job').textContent=result.message||result.error||'Request submitted';
+ if(result.job_id) watchJob(result.job_id);
 }
 async function watchJob(id){
  const panel=document.getElementById('job');
