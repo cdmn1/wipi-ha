@@ -1,0 +1,10 @@
+configuration:
+  rom_path:
+    name: ROM folder path
+    description: Absolute path to the folder containing your Naomi ROM files. Use a folder under /media or /share.
+  cabinets:
+    name: NetDIMM cabinets
+    description: Add one entry per cabinet using Name|IP address|platform|firmware. Example: Main cabinet|192.168.1.50|naomi|4.01. Replace the example IP with your cabinet's actual address.
+  disable_crc:
+    name: Disable CRC check
+    description: Skip the post-upload CRC check for faster boot. Leave disabled unless you know your setup supports it.
