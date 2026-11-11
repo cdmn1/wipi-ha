@@ -335,7 +335,10 @@ def api_job(job_id: str):
 
 @app.get("/api/status")
 def api_status():
-    games, error = discover_games()
+    try:
+        games, error = discover_games()
+    except (OSError, ValueError) as exc:
+        games, error = [], str(exc)
     return jsonify(ok=error is None, game_count=len(games), error=error,
                    cabinet_count=len(cabinets()), netdimm_library=NetDimm is not None)
 
