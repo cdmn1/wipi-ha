@@ -25,7 +25,7 @@ jobs:
           mkdir -p test-share/fileset/roms test-share/fileset/csv
           printf 'sample ROM' > test-share/fileset/roms/sample.bin
           printf 'system,romname,image,video,description,lcd_description,manufacturer,year,genre,rating,orientation,controls,enabled,favourite,openjvs,openffb,game_id,audit_name\n"Sega Naomi",sample.bin,sample.png,,Sample Game,,Test,2000,Action,,Horizontal,Digital,Yes,No,,,,\n' > test-share/fileset/csv/romsinfo.csv
-          printf '{"rom_path":"/share/fileset/roms","cabinets":["Test cabinet|127.0.0.1|naomi|4.01"],"disable_crc":false}' > test-options.json
+          printf '{"rom_path":"/share/fileset/roms","cabinets":[{"name":"Test cabinet","ip":"127.0.0.1","target":"naomi","firmware":"4.01"}],"disable_crc":false}' > test-options.json
           docker run -d --name wipi-ha-test -p 8256:8256 \
             -v "$PWD/test-options.json:/data/options.json:ro" \
             -v "$PWD/test-share:/share:ro" wipi-ha:test
