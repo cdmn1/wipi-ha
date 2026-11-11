@@ -1,5 +1,5 @@
 name: WiPi Netbooter
-version: "0.2.0"
+version: "0.2.1"
 slug: wipi-netbooter
 description: WiPi-style Sega Naomi game browser and NetDIMM loader
 url: https://github.com/cdmn1/wipi-ha
@@ -7,7 +7,6 @@ arch:
   - amd64
 startup: application
 boot: auto
-init: false
 webui: "http://[HOST]:[PORT:8256]"
 map:
   - type: media
