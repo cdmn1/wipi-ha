@@ -13,7 +13,7 @@ The app is developed on the separate wipi-x86-port branch. The default main bran
 ## Configuration tab
 
 - **ROM folder path** (rom_path): defaults to /media/NAOMI. It must be under /media or /share, which Home Assistant maps into the app read-only.
-- **NetDIMM cabinets** (cabinets): add one entry per cabinet in the form Name|IP address|platform|firmware. Example: Main cabinet|192.168.1.50|naomi|4.01. Replace the example IP with the actual cabinet address. Supported platforms: naomi, chihiro, triforce.
+- **NetDIMM cabinets** (cabinets): add a cabinet entry and fill in its name, IP address, platform, and firmware using the separate fields. Supported platforms: naomi, chihiro, triforce. Supported firmware choices are provided in the Configuration tab.
 - **Disable CRC check** (disable_crc): optional faster boot behavior; disabled by default.
 
 ## ROM fileset layout
