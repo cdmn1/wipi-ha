@@ -2,43 +2,43 @@
 
 A Home Assistant app port of the WiPi Netbooter experience for x86-64 systems.
 
-## Goal
+## Current development status
 
-Provide a browser-based Naomi netboot interface in Home Assistant, with:
+The `wipi-x86-port` branch now contains the first Home Assistant app scaffold:
 
-- ROM discovery from the configured Home Assistant media folder
-- Cabinet management for multiple NetDIMMs
-- Game selection and loading through the established DragonMinded netboot tools
-- Persistent configuration across app updates
+- x86-64 (`amd64`) container definition.
+- Home Assistant Configuration-tab option named `rom_path`, defaulting to `/media/NAOMI`.
+- Read-only access to Home Assistant's `/media` and `/share` mounts.
+- Runtime validation that the selected path is inside one of those mounted locations and is readable.
+- A small initial web page and status endpoint that report the selected folder and discover candidate `.bin` / `.dat` files.
 
-The target is x86-64 Home Assistant. Raspberry Pi-specific hardware integrations are out of scope for the initial version unless later shown to be required.
+This is an early development build, not yet a usable netboot application. Cabinet configuration, catalogue/artwork integration, NetDIMM communication, game loading, and automated image builds still need to be implemented and tested.
 
-## Development principles
+## ROM folder configuration
 
-1. Keep the existing `naomi-netboot-ha` app untouched.
-2. Use WiPi as the functional reference; do not assume the Raspberry Pi image itself is portable.
-3. Separate the web frontend, netboot/loader logic, and optional hardware services.
-4. Discover ROMs from files actually present in the configured ROM directory. Treat catalogue metadata as optional enrichment, not as a requirement for a file to appear.
-5. Preserve the upstream licensing and attribution of every reused component.
-6. Build and validate an x86-64 container before asking the user to install anything.
+The ROM directory is configured in Home Assistant, not hard-coded into the app:
 
-## Initial investigation
+1. Open **Settings → Apps → WiPi Netbooter → Configuration**.
+2. Set **ROM folder path** (for example, `/media/NAOMI`).
+3. Save the configuration and restart the app if Home Assistant requests it.
 
-Before implementing the runtime, document:
+The folder must be under `/media` or `/share`, because those are the locations explicitly made available to the app. The app mounts them read-only so it cannot modify the user's ROM collection.
 
-- Which WiPi frontend files and PHP extensions are required.
-- How the frontend invokes the Python loader.
-- Which DragonMinded tools and Python dependencies are required.
-- Which services are Raspberry Pi-specific and can be omitted.
-- How cabinet and ROM configuration are stored.
+## Project goals
 
-## Planned app layout
+- Browser-based game browser, cabinet selection and loading workflow.
+- Multiple configurable NetDIMMs, without invented or hard-coded network addresses.
+- ROM discovery from the configured Home Assistant mount.
+- WiPi catalogue and artwork compatibility where licensing and file formats permit.
+- Persistent settings across app updates.
+- x86-64 support without Raspberry Pi GPIO or other Pi-only hardware dependencies.
 
-The intended Home Assistant app will live in its own app directory and include:
+## Upstream compatibility and licensing
 
-- `config.yaml` — Home Assistant app metadata and options
-- `Dockerfile` — x86-64 runtime image
-- `run.sh` — startup and persistent configuration setup
-- `rootfs/` — app-owned frontend, loader integration and service configuration
+WiPi is the functional reference, but the public GitHub metadata for both the WiPiNetbooter64 fork and the original WiPiNetbooter repository currently reports no declared repository licence. For that reason, this project does not copy their frontend or loader source wholesale. The portable NetDIMM components and their individual dependencies will be checked before any reuse; otherwise, equivalent behavior will be implemented independently with appropriate attribution.
 
-This repository starts clean; no files or runtime code are copied from the previous `naomi-netboot-ha` project by default.
+The app will not bundle game ROMs. Users provide their own ROM files and any compatible catalogue/artwork fileset.
+
+## Safety of the existing installation
+
+Development takes place on the separate `wipi-x86-port` branch and in the separate `wipi-ha` repository. The existing `naomi-netboot-ha` app is not modified.
