@@ -1,0 +1,4 @@
+Flask==3.1.1
+netdimmutils==0.5.4
+naomiutils
+arcadeutils
