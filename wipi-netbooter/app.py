@@ -69,8 +69,20 @@ def cabinets() -> list[dict[str, str]]:
     return result
 
 
+def rom_directories(folder: Path) -> list[Path]:
+    """Support either a ROM folder itself or a WiPi fileset root containing roms/."""
+    candidates = [folder, folder / "roms"]
+    return [candidate for candidate in candidates if candidate.is_dir()]
+
+
 def catalogue_path(folder: Path) -> Path | None:
-    for candidate in (folder / "romsinfo.csv", folder / "csv" / "romsinfo.csv"):
+    candidates = (
+        folder / "romsinfo.csv",
+        folder / "csv" / "romsinfo.csv",
+        folder.parent / "romsinfo.csv",
+        folder.parent / "csv" / "romsinfo.csv",
+    )
+    for candidate in candidates:
         if candidate.is_file():
             return candidate
     return None
@@ -95,22 +107,23 @@ def discover_games() -> tuple[list[dict[str, Any]], str | None]:
 
     games = []
     try:
-        for path in folder.iterdir():
-            if not path.is_file() or not any(path.name.lower().endswith(s) for s in ROM_SUFFIXES):
-                continue
-            row = metadata.get(path.name, {})
-            games.append({
-                "filename": path.name,
-                "name": row.get("description") or row.get("romname") or path.name,
-                "system": row.get("system", "Unknown system"),
-                "manufacturer": row.get("manufacturer", ""),
-                "year": row.get("year", ""),
-                "genre": row.get("genre", ""),
-                "orientation": row.get("orientation", ""),
-                "controls": row.get("controls", ""),
-                "image": row.get("image", ""),
-                "catalogued": bool(row),
-            })
+        for directory in rom_directories(folder):
+            for path in directory.iterdir():
+                if not path.is_file() or not any(path.name.lower().endswith(s) for s in ROM_SUFFIXES):
+                    continue
+                row = metadata.get(path.name, {})
+                games.append({
+                    "filename": path.name,
+                    "name": row.get("description") or row.get("romname") or path.name,
+                    "system": row.get("system", "Unknown system"),
+                    "manufacturer": row.get("manufacturer", ""),
+                    "year": row.get("year", ""),
+                    "genre": row.get("genre", ""),
+                    "orientation": row.get("orientation", ""),
+                    "controls": row.get("controls", ""),
+                    "image": row.get("image", ""),
+                    "catalogued": bool(row),
+                })
     except OSError as exc:
         return [], f"Cannot read ROM folder: {exc}"
     games.sort(key=lambda game: game["name"].casefold())
@@ -121,10 +134,11 @@ def safe_rom(filename: str) -> Path:
     folder = rom_folder()
     if Path(filename).name != filename:
         raise ValueError("Invalid ROM filename.")
-    path = folder / filename
-    if not path.is_file() or not any(path.name.lower().endswith(s) for s in ROM_SUFFIXES):
-        raise FileNotFoundError("ROM file is not available.")
-    return path
+    for directory in rom_directories(folder):
+        path = directory / filename
+        if path.is_file() and any(path.name.lower().endswith(s) for s in ROM_SUFFIXES):
+            return path
+    raise FileNotFoundError("ROM file is not available.")
 
 
 def enum_value(enum_type: Any, value: str) -> Any:
@@ -270,8 +284,11 @@ def artwork(filename: str):
         folder = rom_folder()
     except ValueError:
         abort(404)
-    for subfolder in ("images", "artwork", "img"):
-        candidate = folder / subfolder
+    candidates = []
+    for root in (folder, folder.parent):
+        for subfolder in ("images", "artwork", "img"):
+            candidates.append(root / subfolder)
+    for candidate in candidates:
         if (candidate / filename).is_file():
             return send_from_directory(candidate, filename)
     abort(404)
