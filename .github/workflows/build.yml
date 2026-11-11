@@ -1,0 +1,38 @@
+name: Build and validate WiPi Home Assistant app
+
+on:
+  push:
+    branches: [wipi-x86-port]
+    paths:
+      - "wipi_netbooter/**"
+      - ".github/workflows/**"
+      - "repository.yaml"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build amd64 app image
+        run: docker build --platform linux/amd64 -t wipi-ha:test ./wipi_netbooter
+      - name: Check Python syntax
+        run: python3 -m py_compile wipi_netbooter/app.py
+      - name: Smoke test web UI and API
+        run: |
+          mkdir -p test-share/roms
+          printf '{"rom_path":"/share/roms","cabinets":["Test cabinet|127.0.0.1|naomi|4.01"],"disable_crc":false}' > test-options.json
+          docker run -d --name wipi-ha-test -p 8256:8256 \
+            -v "$PWD/test-options.json:/data/options.json:ro" \
+            -v "$PWD/test-share:/share:ro" wipi-ha:test
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8256/api/status >/tmp/status.json; then break; fi
+            sleep 1
+          done
+          cat /tmp/status.json
+          python3 -c 'import json; d=json.load(open("/tmp/status.json")); assert d["ok"] and d["cabinet_count"] == 1'
+          curl -fsS http://127.0.0.1:8256/ >/dev/null
+          docker rm -f wipi-ha-test
+      - name: Cleanup
+        if: always()
+        run: docker rm -f wipi-ha-test || true
