@@ -36,7 +36,7 @@ Implemented:
 - Multiple cabinet entries in Configuration.
 - WiPi-compatible CSV catalogue matching and optional artwork discovery.
 - Search and system/genre filters in the browser.
-- Cabinet selection and NetDIMM send/reboot workflow.
+- Cabinet selection, NetDIMM connection test, and send/reboot workflow.
 - CI build, Python syntax, package API, web UI and catalogue smoke tests.
 
 Not yet validated against a physical cabinet:
