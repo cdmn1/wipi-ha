@@ -51,17 +51,27 @@ def rom_folder() -> Path:
 
 def cabinets() -> list[dict[str, str]]:
     result = []
-    for index, line in enumerate(options().get("cabinets", [])):
-        fields = [part.strip() for part in str(line).split("|")]
-        if len(fields) < 2 or not fields[0] or not fields[1]:
+    for index, entry in enumerate(options().get("cabinets", [])):
+        # Current config uses structured fields; accept the early pipe-delimited
+        # development format as a harmless migration fallback.
+        if isinstance(entry, dict):
+            name = str(entry.get("name", "")).strip()
+            address = str(entry.get("ip", "")).strip()
+            target = str(entry.get("target", "naomi")).strip().lower()
+            firmware = str(entry.get("firmware", "4.01")).strip()
+        else:
+            fields = [part.strip() for part in str(entry).split("|")]
+            if len(fields) < 2:
+                continue
+            name, address = fields[0], fields[1]
+            target = fields[2].lower() if len(fields) > 2 and fields[2] else "naomi"
+            firmware = fields[3] if len(fields) > 3 and fields[3] else "4.01"
+        if not name or not address:
             continue
-        name, address = fields[0], fields[1]
         try:
             ipaddress.ip_address(address)
         except ValueError:
             continue
-        target = fields[2].lower() if len(fields) > 2 and fields[2] else "naomi"
-        firmware = fields[3] if len(fields) > 3 and fields[3] else "4.01"
         if target not in {"naomi", "chihiro", "triforce"}:
             continue
         result.append({"id": str(index), "name": name, "ip": address,
