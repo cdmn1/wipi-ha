@@ -4,7 +4,7 @@ on:
   push:
     branches: [wipi-x86-port]
     paths:
-      - "wipi_netbooter/**"
+      - "wipi-netbooter/**"
       - ".github/workflows/**"
       - "repository.yaml"
   workflow_dispatch:
@@ -15,10 +15,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build amd64 app image
-        run: docker build --platform linux/amd64 -t wipi-ha:test ./wipi_netbooter
+        run: docker build --platform linux/amd64 -t wipi-ha:test ./wipi-netbooter
       - name: Check Python syntax and NetDIMM package API
         run: |
-          python3 -m py_compile wipi_netbooter/app.py
+          python3 -m py_compile wipi-netbooter/app.py
           docker run --rm wipi-ha:test python -c 'from netdimm import NetDimm, NetDimmTargetEnum, NetDimmVersionEnum; print("targets:", [x.value for x in NetDimmTargetEnum]); print("versions:", [x.value for x in NetDimmVersionEnum]); assert hasattr(NetDimm, "send") and hasattr(NetDimm, "reboot")'
       - name: Smoke test web UI and API
         run: |
