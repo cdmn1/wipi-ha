@@ -1,44 +1,37 @@
 # WiPi Home Assistant
 
-A Home Assistant app port of the WiPi Netbooter experience for x86-64 systems.
+An x86-64 Home Assistant app for a WiPi-style Sega Naomi/NetDIMM game browser and loader.
 
-## Current development status
+## Install structure
 
-The `wipi-x86-port` branch now contains the first Home Assistant app scaffold:
+This repository is a Home Assistant app repository. Add this repository URL in Home Assistant's app-store repository manager:
 
-- x86-64 (`amd64`) container definition.
-- Home Assistant Configuration-tab option named `rom_path`, defaulting to `/media/NAOMI`.
-- Read-only access to Home Assistant's `/media` and `/share` mounts.
-- Runtime validation that the selected path is inside one of those mounted locations and is readable.
-- A small initial web page and status endpoint that report the selected folder and discover candidate `.bin` / `.dat` files.
+https://github.com/cdmn1/wipi-ha
 
-This is an early development build, not yet a usable netboot application. Cabinet configuration, catalogue/artwork integration, NetDIMM communication, game loading, and automated image builds still need to be implemented and tested.
+Development is currently on the wipi-x86-port branch; it is not ready for installation from the default branch yet.
 
-## ROM folder configuration
+## Configuration
 
-The ROM directory is configured in Home Assistant, not hard-coded into the app:
+The app exposes its settings in the Home Assistant Configuration tab:
 
-1. Open **Settings → Apps → WiPi Netbooter → Configuration**.
-2. Set **ROM folder path** (for example, `/media/NAOMI`).
-3. Save the configuration and restart the app if Home Assistant requests it.
+- ROM folder path (rom_path): defaults to /media/NAOMI. Must be under /media or /share.
+- Cabinets (cabinets): add one entry per NetDIMM using Name|IP address|platform|firmware, for example Main cabinet|192.168.1.50|naomi|4.01. Replace the example address with the actual NetDIMM address. Supported platforms: naomi, chihiro, triforce.
+- Disable CRC check (disable_crc): optional faster boot behavior; disabled by default.
 
-The folder must be under `/media` or `/share`, because those are the locations explicitly made available to the app. The app mounts them read-only so it cannot modify the user's ROM collection.
+The app mounts /media and /share read-only and validates the selected ROM folder.
 
-## Project goals
+## ROM catalogue and artwork
 
-- Browser-based game browser, cabinet selection and loading workflow.
-- Multiple configurable NetDIMMs, without invented or hard-coded network addresses.
-- ROM discovery from the configured Home Assistant mount.
-- WiPi catalogue and artwork compatibility where licensing and file formats permit.
-- Persistent settings across app updates.
-- x86-64 support without Raspberry Pi GPIO or other Pi-only hardware dependencies.
+The game browser discovers files in the selected ROM folder. It can enrich entries from a WiPi-compatible romsinfo.csv placed either directly in the folder or in its csv/ subfolder. Artwork is read from images/, artwork/, or img/ beneath the selected folder. The catalogue and artwork are not bundled; users provide their own fileset. Games remain visible by filename even if the catalogue is absent.
 
-## Upstream compatibility and licensing
+Supported ROM file extensions are .bin, .bin.gz, and .dat.
 
-WiPi is the functional reference, but the public GitHub metadata for both the WiPiNetbooter64 fork and the original WiPiNetbooter repository currently reports no declared repository licence. For that reason, this project does not copy their frontend or loader source wholesale. The portable NetDIMM components and their individual dependencies will be checked before any reuse; otherwise, equivalent behavior will be implemented independently with appropriate attribution.
+## NetDIMM transfer
 
-The app will not bundle game ROMs. Users provide their own ROM files and any compatible catalogue/artwork fileset.
+The app uses DragonMinded's public-domain netdimmutils Python package for transfer. Compressed .gz files are decompressed in the app before sending. The app validates cabinet IP addresses and ROM filenames before starting a transfer.
 
-## Safety of the existing installation
+## Current status
 
-Development takes place on the separate `wipi-x86-port` branch and in the separate `wipi-ha` repository. The existing `naomi-netboot-ha` app is not modified.
+This is an early development build. The game browser, optional catalogue matching, cabinet selection, and NetDIMM send/reboot path are implemented, but must be validated against a real NetDIMM before being considered ready for everyday use. WiPi-specific advanced settings, per-game patches, card emulation, OpenJVS, OpenFFB, and other Raspberry Pi hardware integrations are not included yet.
+
+The existing naomi-netboot-ha repository and app are not modified by this project.
