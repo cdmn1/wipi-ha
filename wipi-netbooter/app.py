@@ -177,7 +177,7 @@ def perform_load(job_id: str, cabinet: dict[str, str], filename: str) -> None:
         target = enum_value(NetDimmTargetEnum, cabinet["target"])
         version = enum_value(NetDimmVersionEnum, cabinet["firmware"])
         dimm = NetDimm(cabinet["ip"], version=version, target=target,
-                       log=lambda message: update(message=str(message)))
+                       log=lambda message, **kwargs: update(message=str(message)))
 
         def progress(sent: int, total: int) -> None:
             percent = int((sent / total) * 100) if total else 0
