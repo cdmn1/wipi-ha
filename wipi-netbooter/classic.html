@@ -18,6 +18,13 @@ input,select{background:#102536;border:1px solid #527084;color:#fff;padding:10px
 .game:hover{border-color:#37b5ed;background:#18384e}.art{height:112px;background:#1b3a50;display:flex;align-items:center;justify-content:center;color:#9cb7c7;margin-bottom:9px}
 .art img{max-width:100%;max-height:100%;object-fit:contain}.gname{font-weight:bold;font-size:14px;min-height:34px}.meta{color:#9cb7c7;font-size:11px;margin-top:5px}
 #detail{display:none;background:#102536;border:1px solid #3d6b86;padding:18px;margin-bottom:18px}
+.editor-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;background:#102536;border:1px solid #31546a;padding:16px}
+.editor-form label{display:flex;flex-direction:column;gap:5px;color:#a8c1d0;font-size:12px}
+.editor-form input,.editor-form select{width:100%;min-width:0}
+.editor-form .checks{display:flex;gap:20px;align-items:center;flex-wrap:wrap}
+.editor-form .checks label{display:flex;flex-direction:row;align-items:center;font-size:14px}
+.editor-form .checks input{width:auto}
+.editor-form button,.editor-form #editor-status{grid-column:1/-1}
 .detailrow{display:grid;grid-template-columns:minmax(180px,300px) 1fr;gap:20px}.detailrow img{max-width:100%;max-height:220px;object-fit:contain;background:#18384e}
 table{border-collapse:collapse;width:100%;margin:12px 0}td{border-bottom:1px solid #31546a;padding:8px}td:first-child{color:#83b9d5;width:130px}
 video{max-width:100%;max-height:220px;background:#000}.launch{margin-top:12px}.muted{color:#9cb7c7}.hidden{display:none}
@@ -26,9 +33,29 @@ video{max-width:100%;max-height:220px;background:#000}.launch{margin-top:12px}.m
 </head>
 <body>
 <header><div class="brand">WiPi NETBOOTER</div><div class="sub">CLASSIC INTERFACE · SEGA NAOMI NETDIMM</div>
-<nav><button id="all-tab" class="active">GAME LIST</button><button id="fave-tab">FAVOURITES</button><button id="setup-tab">CABINET STATUS</button></nav></header>
+<nav><button id="all-tab" class="active">GAME LIST</button><button id="fave-tab">FAVOURITES</button><button id="editor-tab">CATALOGUE EDITOR</button><button id="setup-tab">CABINET STATUS</button></nav></header>
 <main>
 <section id="setup" class="hidden"><h2>NetDIMM cabinets</h2><p class="muted">Cabinet addresses and firmware are managed in the Home Assistant app Configuration tab.</p><div id="cabinet-list"></div></section>
+<section id="editor" class="hidden">
+<h2>Catalogue editor</h2>
+<p class="muted">Register a ROM already in your shared ROM folder, or edit its existing WiPi CSV entry. Artwork and video files should be placed in the shared images/ and videos/ folders.</p>
+<form id="catalogue-form" class="editor-form">
+<label>ROM file<select id="edit-rom" required></select></label>
+<label>Game title<input id="edit-description" required></label>
+<label>System<input id="edit-system" value="Sega Naomi"></label>
+<label>Manufacturer<input id="edit-manufacturer"></label>
+<label>Year<input id="edit-year" inputmode="numeric"></label>
+<label>Genre<input id="edit-genre"></label>
+<label>Orientation<select id="edit-orientation"><option value="">Not set</option><option>Horizontal</option><option>Vertical</option></select></label>
+<label>Controls<select id="edit-controls"><option value="">Not set</option><option>Digital (Stick)</option><option>Analog (Stick)</option><option>Analog (Driving)</option><option>Lightgun</option><option>Other</option></select></label>
+<label>Artwork filename<input id="edit-image" placeholder="game.png"></label>
+<label>Video filename<input id="edit-video" placeholder="game.mp4"></label>
+<label>LCD description<input id="edit-lcd"></label>
+<label>Rating<input id="edit-rating"></label>
+<div class="checks"><label><input id="edit-enabled" type="checkbox" checked> Enabled</label><label><input id="edit-favourite" type="checkbox"> Favourite</label></div>
+<button class="launch" type="submit">SAVE CATALOGUE ENTRY</button><div id="editor-status" class="muted"></div>
+</form>
+</section>
 <section id="browser">
 <div class="filters">
 <input id="search" placeholder="Search games…">
@@ -54,10 +81,11 @@ async function init(){
  cabinets.forEach(c=>{const o=document.createElement('option');o.value=c.id;o.textContent=c.name+' ('+c.ip+')';el('cabinet').appendChild(o)});
  el('cabinet-list').innerHTML=cabinets.length?cabinets.map(c=>'<p>'+esc(c.name)+' — '+esc(c.ip)+' · '+esc(c.target)+' · firmware '+esc(c.firmware)+'</p>').join(''):'<p class="muted">No cabinets configured yet.</p>';
  ['search','system','genre','orientation','controls'].forEach(id=>el(id).addEventListener(id==='search'?'input':'change',render));
- el('all-tab').onclick=()=>setMode('all');el('fave-tab').onclick=()=>setMode('favourites');el('setup-tab').onclick=()=>setMode('setup');
+ el('all-tab').onclick=()=>setMode('all');el('fave-tab').onclick=()=>setMode('favourites');el('editor-tab').onclick=()=>setMode('editor');el('setup-tab').onclick=()=>setMode('setup');
+ populateEditor();el('edit-rom').addEventListener('change',loadEditorEntry);el('catalogue-form').addEventListener('submit',saveCatalogueEntry);
  render();
 }
-function setMode(m){mode=m;el('browser').classList.toggle('hidden',m==='setup');el('setup').classList.toggle('hidden',m!=='setup');el('all-tab').classList.toggle('active',m==='all');el('fave-tab').classList.toggle('active',m==='favourites');el('setup-tab').classList.toggle('active',m==='setup');if(m!=='setup')render()}
+function setMode(m){mode=m;el('browser').classList.toggle('hidden',m==='setup'||m==='editor');el('setup').classList.toggle('hidden',m!=='setup');el('editor').classList.toggle('hidden',m!=='editor');el('all-tab').classList.toggle('active',m==='all');el('fave-tab').classList.toggle('active',m==='favourites');el('editor-tab').classList.toggle('active',m==='editor');el('setup-tab').classList.toggle('active',m==='setup');if(m==='editor')populateEditor();if(m==='all'||m==='favourites')render()}
 function render(){
  if(mode==='setup')return;
  const q=el('search').value.toLowerCase(),s=el('system').value,g=el('genre').value,o=el('orientation').value,c=el('controls').value;
@@ -66,11 +94,43 @@ function render(){
  el('games').innerHTML=shown.map((x,i)=>'<article class="game" data-index="'+games.indexOf(x)+'"><div class="art">'+(x.image?'<img loading="lazy" src="/art/'+encodeURIComponent(x.image)+'" onerror="this.remove()">':'NAOMI')+'</div><div class="gname">'+esc(x.name)+(x.favourite?' ★':'')+'</div><div class="meta">'+esc(x.system)+' · '+esc(x.year)+'<br>'+esc(x.genre)+'</div></article>').join('');
  document.querySelectorAll('[data-index]').forEach(node=>node.onclick=()=>showDetail(games[Number(node.dataset.index)]));
 }
+function populateEditor(){
+ const select=el('edit-rom'),previous=select.value;
+ select.innerHTML=games.map(g=>'<option value="'+esc(g.filename)+'">'+esc(g.filename)+(g.catalogued?' · catalogued':' · not catalogued')+'</option>').join('');
+ if(previous&&games.some(g=>g.filename===previous))select.value=previous;
+ loadEditorEntry();
+}
+function loadEditorEntry(){
+ const g=games.find(x=>x.filename===el('edit-rom').value);
+ if(!g)return;
+ el('edit-description').value=g.description||g.name||'';
+ el('edit-system').value=g.system==='Unknown system'?'Sega Naomi':g.system;
+ el('edit-manufacturer').value=g.manufacturer||'';el('edit-year').value=g.year||'';
+ el('edit-genre').value=g.genre||'';el('edit-orientation').value=g.orientation||'';
+ el('edit-controls').value=g.controls||'';el('edit-image').value=g.image||'';
+ el('edit-video').value=g.video||'';el('edit-lcd').value=g.lcd_description||'';
+ el('edit-rating').value=g.rating||'';el('edit-enabled').checked=!!g.enabled;
+ el('edit-favourite').checked=!!g.favourite;el('editor-status').textContent=g.catalogued?'Editing existing CSV entry.':'This ROM is not yet in the catalogue.';
+}
+async function saveCatalogueEntry(event){
+ event.preventDefault();const status=el('editor-status');status.textContent='Saving catalogue…';
+ const payload={romname:el('edit-rom').value,description:el('edit-description').value,system:el('edit-system').value,
+ manufacturer:el('edit-manufacturer').value,year:el('edit-year').value,genre:el('edit-genre').value,
+ orientation:el('edit-orientation').value,controls:el('edit-controls').value,image:el('edit-image').value,
+ video:el('edit-video').value,lcd_description:el('edit-lcd').value,rating:el('edit-rating').value,
+ enabled:el('edit-enabled').checked,favourite:el('edit-favourite').checked};
+ try{
+  const response=await fetch('/api/catalogue',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  const result=await response.json();if(!response.ok||!result.ok)throw new Error(result.error||'Save failed');
+  status.textContent=result.message;const updated=await(await fetch('/api/games')).json();games=updated.games||[];populateEditor();render();
+ }catch(error){status.textContent='Could not save: '+error.message}
+}
 function showDetail(x){
  selected=x;const cabinetOptions=cabinets.map(c=>'<option value="'+esc(c.id)+'">'+esc(c.name)+'</option>').join('');
  el('detail').style.display='block';
- el('detail').innerHTML='<div class="detailrow"><div>'+(x.image?'<img src="/art/'+encodeURIComponent(x.image)+'">':'<div class="art">NAOMI</div>')+(x.video?'<video controls playsinline preload="none" src="/video/'+encodeURIComponent(x.video)+'"></video>':'')+'</div><div><h2>'+esc(x.name)+(x.favourite?' ★':'')+'</h2><table><tr><td>System</td><td>'+esc(x.system)+'</td></tr><tr><td>Manufacturer</td><td>'+esc(x.manufacturer)+'</td></tr><tr><td>Year</td><td>'+esc(x.year)+'</td></tr><tr><td>Genre</td><td>'+esc(x.genre)+'</td></tr><tr><td>Controls</td><td>'+esc(x.controls)+'</td></tr><tr><td>Orientation</td><td>'+esc(x.orientation)+'</td></tr><tr><td>ROM</td><td>'+esc(x.filename)+'</td></tr></table><label class="muted">Load to cabinet </label><select id="detail-cabinet">'+cabinetOptions+'</select><br><button class="launch" id="launch">LAUNCH GAME</button><div class="muted" id="load-status"></div></div></div>';
- el('launch').disabled=!cabinets.length;el('launch').onclick=()=>launch(x.filename);
+ el('detail').innerHTML='<div class="detailrow"><div>'+(x.image?'<img src="/art/'+encodeURIComponent(x.image)+'">':'<div class="art">NAOMI</div>')+(x.video?'<video controls playsinline preload="none" src="/video/'+encodeURIComponent(x.video)+'"></video>':'')+'</div><div><h2>'+esc(x.name)+(x.favourite?' ★':'')+'</h2><table><tr><td>System</td><td>'+esc(x.system)+'</td></tr><tr><td>Manufacturer</td><td>'+esc(x.manufacturer)+'</td></tr><tr><td>Year</td><td>'+esc(x.year)+'</td></tr><tr><td>Genre</td><td>'+esc(x.genre)+'</td></tr><tr><td>Controls</td><td>'+esc(x.controls)+'</td></tr><tr><td>Orientation</td><td>'+esc(x.orientation)+'</td></tr><tr><td>ROM</td><td>'+esc(x.filename)+'</td></tr></table><label class="muted">Load to cabinet </label><select id="detail-cabinet">'+cabinetOptions+'</select><br><button class="launch" id="launch">LAUNCH GAME</button> <button type="button" class="launch" id="edit-game">EDIT CATALOGUE ENTRY</button><div class="muted" id="load-status"></div></div></div>';
+ el('launch').disabled=!cabinets.length||!x.enabled;el('launch').onclick=()=>launch(x.filename);
+ el('edit-game').onclick=()=>{setMode('editor');el('edit-rom').value=x.filename;loadEditorEntry();window.scrollTo({top:0,behavior:'smooth'})};
  el('detail').scrollIntoView({behavior:'smooth',block:'start'});
 }
 async function launch(filename){
