@@ -39,12 +39,15 @@ jobs:
           grep -q 'CLASSIC INTERFACE' /tmp/home.html
           curl -fsS http://127.0.0.1:8256/classic >/tmp/classic.html
           grep -q '<h2>Catalog editor</h2>' /tmp/classic.html
+          grep -q 'CATALOG EDITOR' /tmp/classic.html
+          grep -q 'SAVE CATALOG ENTRY' /tmp/classic.html
+          grep -q 'romBase=g.filename.replace' /tmp/classic.html
           grep -q '<select id="edit-system"' /tmp/classic.html
           ! grep -q 'LCD description' /tmp/classic.html
           curl -fsS http://127.0.0.1:8256/modern >/tmp/modern.html
           grep -q 'Open Classic interface' /tmp/modern.html
           curl -fsS http://127.0.0.1:8256/api/games >/tmp/games.json
-          python3 -c 'import json; d=json.load(open("/tmp/games.json")); assert len(d["games"]) == 1 and d["games"][0]["name"] == "Sample Game" and d["games"][0]["genre"] == "Action"'
+          python3 -c 'import json; d=json.load(open("/tmp/games.json")); assert len(d["games"]) == 1 and d["games"][0]["name"] == "Sample Game" and d["games"][0]["genre"] == "Action" and d["systems"] == ["Sega Naomi"]'
           curl -fsS -X POST http://127.0.0.1:8256/api/catalogue -H 'Content-Type: application/json' -d '{"romname":"sample.bin","description":"Edited Sample","system":"Sega Naomi","manufacturer":"Test","year":"2000","genre":"Action","orientation":"Horizontal","controls":"Digital (Stick)","enabled":true,"favourite":true}' >/tmp/catalogue.json
           python3 -c 'import json; d=json.load(open("/tmp/catalogue.json")); assert d["ok"]'
           curl -fsS http://127.0.0.1:8256/api/games >/tmp/updated-games.json
