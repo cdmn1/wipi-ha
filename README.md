@@ -37,9 +37,12 @@ Implemented:
 - WiPi-compatible CSV catalogue matching and optional artwork discovery.
 - Search and system, genre, orientation and controls filters in the browser.
 - WiPi-compatible enabled/disabled and favourite catalogue handling.
+- Initial Classic WiPi-style browser at `/classic`, sharing the same game and NetDIMM APIs as Modern.
 - Optional favourite-only and show-disabled views.
 - Cabinet selection, NetDIMM connection test, and send/reboot workflow.
 - CI build, Python syntax, package API, web UI and catalogue smoke tests.
+
+The Classic route is an initial browser port, not yet a complete replacement for every original WiPi PHP setup page. Raspberry Pi-only actions remain intentionally unavailable.
 
 Not yet validated against a physical cabinet:
 - A complete real NetDIMM upload and boot.
