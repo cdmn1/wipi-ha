@@ -104,6 +104,23 @@ def catalogue_path(folder: Path) -> Path | None:
     return None
 
 
+def discover_systems(folder: Path) -> list[str]:
+    """Return every distinct non-empty system label present in the ROM CSV."""
+    csv_path = catalogue_path(folder)
+    if not csv_path:
+        return []
+    try:
+        with csv_path.open("r", encoding="utf-8-sig", newline="") as stream:
+            systems = {
+                (row.get("system") or "").strip()
+                for row in csv.DictReader(stream)
+            }
+        return sorted((value for value in systems if value), key=str.casefold)
+    except (OSError, csv.Error, UnicodeError) as exc:
+        LOG.warning("Could not read systems from ROM catalogue %s: %s", csv_path, exc)
+        return []
+
+
 def discover_games() -> tuple[list[dict[str, Any]], str | None]:
     folder = rom_folder()
     if not folder.is_dir() or not os.access(folder, os.R_OK):
@@ -327,7 +344,7 @@ def classic_index():
 def api_games():
     try:
         games, error = discover_games()
-        return jsonify(games=games, error=error, rom_path=str(rom_folder()))
+        return jsonify(games=games, systems=discover_systems(rom_folder()), error=error, rom_path=str(rom_folder()))
     except (OSError, ValueError) as exc:
         return jsonify(games=[], error=str(exc), rom_path=None)
 
