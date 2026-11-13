@@ -1,5 +1,5 @@
 name: WiPi Netbooter
-version: "0.2.7"
+version: "0.2.8"
 slug: wipi-netbooter
 description: WiPi-style Sega Naomi game browser and NetDIMM loader
 url: https://github.com/cdmn1/wipi-ha
