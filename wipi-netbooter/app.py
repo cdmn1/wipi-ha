@@ -306,6 +306,14 @@ init().catch(e=>document.getElementById('summary').textContent='Could not load g
 
 @app.get("/")
 def index():
+    if str(options().get("frontend", "modern")).strip().lower() == "classic":
+        classic_page = Path(__file__).with_name("classic.html").read_text(encoding="utf-8")
+        return render_template_string(classic_page)
+    return render_template_string(PAGE)
+
+
+@app.get("/modern")
+def modern_index():
     return render_template_string(PAGE)
 
 
