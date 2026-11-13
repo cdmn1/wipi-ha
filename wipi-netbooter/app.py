@@ -29,6 +29,12 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 app = Flask(__name__)
 JOBS: dict[str, dict[str, Any]] = {}
 JOBS_LOCK = threading.Lock()
+CATALOGUE_LOCK = threading.Lock()
+CATALOGUE_COLUMNS = [
+    "system", "romname", "image", "video", "description", "lcd_description",
+    "manufacturer", "year", "genre", "rating", "orientation", "controls",
+    "enabled", "favourite", "openjvs", "openffb", "game_id", "audit_name",
+]
 
 
 def options() -> dict[str, Any]:
@@ -125,6 +131,8 @@ def discover_games() -> tuple[list[dict[str, Any]], str | None]:
                 games.append({
                     "filename": path.name,
                     "name": row.get("description") or row.get("romname") or path.name,
+                    "description": row.get("description", ""),
+                    "lcd_description": row.get("lcd_description", ""),
                     "system": row.get("system", "Unknown system"),
                     "manufacturer": row.get("manufacturer", ""),
                     "year": row.get("year", ""),
@@ -319,6 +327,69 @@ def api_games():
 @app.get("/api/cabinets")
 def api_cabinets():
     return jsonify(cabinets=cabinets())
+
+
+@app.post("/api/catalogue")
+def api_update_catalogue():
+    body = request.get_json(silent=True) or {}
+    filename = str(body.get("romname", "")).strip()
+    try:
+        rom = safe_rom(filename)
+    except (OSError, ValueError) as exc:
+        return jsonify(ok=False, error=str(exc)), 400
+
+    # A catalogue entry is metadata for a ROM already present in the shared ROM folder.
+    values = {
+        "system": str(body.get("system", "Sega Naomi")).strip(),
+        "romname": filename,
+        "image": Path(str(body.get("image", "")).strip()).name if body.get("image") else "",
+        "video": Path(str(body.get("video", "")).strip()).name if body.get("video") else "",
+        "description": str(body.get("description", "")).strip() or rom.stem,
+        "lcd_description": str(body.get("lcd_description", "")).strip(),
+        "manufacturer": str(body.get("manufacturer", "")).strip(),
+        "year": str(body.get("year", "")).strip(),
+        "genre": str(body.get("genre", "")).strip(),
+        "rating": str(body.get("rating", "")).strip(),
+        "orientation": str(body.get("orientation", "")).strip(),
+        "controls": str(body.get("controls", "")).strip(),
+        "enabled": "Yes" if body.get("enabled", True) else "No",
+        "favourite": "Yes" if body.get("favourite", False) else "No",
+    }
+    for field in ("image", "video"):
+        if values[field] and values[field] != str(body.get(field, "")).strip():
+            return jsonify(ok=False, error=f"Invalid {field} filename."), 400
+
+    try:
+        folder = rom_folder()
+        csv_path = catalogue_path(folder) or (folder / "romsinfo.csv")
+        with CATALOGUE_LOCK:
+            rows: list[dict[str, str]] = []
+            fieldnames = CATALOGUE_COLUMNS.copy()
+            if csv_path.is_file():
+                with csv_path.open("r", encoding="utf-8-sig", newline="") as stream:
+                    reader = csv.DictReader(stream)
+                    if reader.fieldnames:
+                        fieldnames = reader.fieldnames
+                    rows = [{key: (row.get(key) or "") for key in fieldnames}
+                            for row in reader]
+            existing = next((row for row in rows if row.get("romname", "").strip() == filename), None)
+            if existing is None:
+                existing = {key: "" for key in fieldnames}
+                rows.append(existing)
+            for key, value in values.items():
+                if key in fieldnames:
+                    existing[key] = value
+            csv_path.parent.mkdir(parents=True, exist_ok=True)
+            temporary = csv_path.with_name(csv_path.name + ".tmp")
+            with temporary.open("w", encoding="utf-8", newline="") as stream:
+                writer = csv.DictWriter(stream, fieldnames=fieldnames, extrasaction="ignore")
+                writer.writeheader()
+                writer.writerows(rows)
+            temporary.replace(csv_path)
+        return jsonify(ok=True, message=f"Saved catalogue entry for {filename}.")
+    except (OSError, csv.Error, UnicodeError) as exc:
+        LOG.exception("Could not update ROM catalogue")
+        return jsonify(ok=False, error=f"Could not save catalogue: {exc}"), 500
 
 
 @app.get("/art/<path:filename>")
