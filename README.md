@@ -38,6 +38,7 @@ Implemented:
 - Search and system, genre, orientation and controls filters in the browser.
 - WiPi-compatible enabled/disabled and favourite catalogue handling.
 - Classic WiPi-style browser at `/classic`, sharing the same game and NetDIMM APIs as Modern.
+- Choose Modern or Classic in the Home Assistant app Configuration tab (`Frontend`). The selection takes effect after the app restarts; direct `/modern` and `/classic` links remain available.
 - Classic catalogue editor can register ROMs already in the shared ROM folder, edit metadata, enable/disable games and mark favourites. It updates the existing `romsinfo.csv` without changing its header or column order.
 - Optional favourite-only and show-disabled views.
 - Cabinet selection, NetDIMM connection test, and send/reboot workflow.
