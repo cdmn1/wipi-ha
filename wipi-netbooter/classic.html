@@ -37,12 +37,12 @@ video{max-width:100%;max-height:220px;background:#000}.launch{margin-top:12px}.m
 <main>
 <section id="setup" class="hidden"><h2>NetDIMM cabinets</h2><p class="muted">Cabinet addresses and firmware are managed in the Home Assistant app Configuration tab.</p><div id="cabinet-list"></div></section>
 <section id="editor" class="hidden">
-<h2>Catalogue editor</h2>
+<h2>Catalog editor</h2>
 <p class="muted">Register a ROM already in your shared ROM folder, or edit its existing WiPi CSV entry. Artwork and video files should be placed in the shared images/ and videos/ folders.</p>
 <form id="catalogue-form" class="editor-form">
 <label>ROM file<select id="edit-rom" required></select></label>
 <label>Game title<input id="edit-description" required></label>
-<label>System<input id="edit-system" value="Sega Naomi"></label>
+<label>System<select id="edit-system" required></select></label>
 <label>Manufacturer<input id="edit-manufacturer"></label>
 <label>Year<input id="edit-year" inputmode="numeric"></label>
 <label>Genre<input id="edit-genre"></label>
@@ -50,7 +50,7 @@ video{max-width:100%;max-height:220px;background:#000}.launch{margin-top:12px}.m
 <label>Controls<select id="edit-controls"><option value="">Not set</option><option>Digital (Stick)</option><option>Analog (Stick)</option><option>Analog (Driving)</option><option>Lightgun</option><option>Other</option></select></label>
 <label>Artwork filename<input id="edit-image" placeholder="game.png"></label>
 <label>Video filename<input id="edit-video" placeholder="game.mp4"></label>
-<label>LCD description<input id="edit-lcd"></label>
+
 <label>Rating<input id="edit-rating"></label>
 <div class="checks"><label><input id="edit-enabled" type="checkbox" checked> Enabled</label><label><input id="edit-favourite" type="checkbox"> Favourite</label></div>
 <button class="launch" type="submit">SAVE CATALOGUE ENTRY</button><div id="editor-status" class="muted"></div>
@@ -95,6 +95,10 @@ function render(){
  document.querySelectorAll('[data-index]').forEach(node=>node.onclick=()=>showDetail(games[Number(node.dataset.index)]));
 }
 function populateEditor(){
+ const systemSelect=el('edit-system'),currentSystem=systemSelect.value;
+ const systems=[...new Set(games.map(g=>g.system).filter(v=>v&&v!=='Unknown system'))].sort((a,b)=>a.localeCompare(b));
+ systemSelect.innerHTML=systems.map(v=>'<option value="'+esc(v)+'">'+esc(v)+'</option>').join('');
+ if(currentSystem&&systems.includes(currentSystem))systemSelect.value=currentSystem;
  const select=el('edit-rom'),previous=select.value;
  select.innerHTML=games.map(g=>'<option value="'+esc(g.filename)+'">'+esc(g.filename)+(g.catalogued?' · catalogued':' · not catalogued')+'</option>').join('');
  if(previous&&games.some(g=>g.filename===previous))select.value=previous;
@@ -108,7 +112,7 @@ function loadEditorEntry(){
  el('edit-manufacturer').value=g.manufacturer||'';el('edit-year').value=g.year||'';
  el('edit-genre').value=g.genre||'';el('edit-orientation').value=g.orientation||'';
  el('edit-controls').value=g.controls||'';el('edit-image').value=g.image||'';
- el('edit-video').value=g.video||'';el('edit-lcd').value=g.lcd_description||'';
+ el('edit-video').value=g.video||'';
  el('edit-rating').value=g.rating||'';el('edit-enabled').checked=!!g.enabled;
  el('edit-favourite').checked=!!g.favourite;el('editor-status').textContent=g.catalogued?'Editing existing CSV entry.':'This ROM is not yet in the catalogue.';
 }
@@ -117,7 +121,7 @@ async function saveCatalogueEntry(event){
  const payload={romname:el('edit-rom').value,description:el('edit-description').value,system:el('edit-system').value,
  manufacturer:el('edit-manufacturer').value,year:el('edit-year').value,genre:el('edit-genre').value,
  orientation:el('edit-orientation').value,controls:el('edit-controls').value,image:el('edit-image').value,
- video:el('edit-video').value,lcd_description:el('edit-lcd').value,rating:el('edit-rating').value,
+ video:el('edit-video').value,rating:el('edit-rating').value,
  enabled:el('edit-enabled').checked,favourite:el('edit-favourite').checked};
  try{
   const response=await fetch('/api/catalogue',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
