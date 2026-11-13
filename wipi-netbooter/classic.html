@@ -79,11 +79,26 @@ async function init(){
   [...new Set(games.map(g=>g[key]).filter(Boolean))].sort().forEach(v=>{const o=document.createElement('option');o.value=v;o.textContent=v;el(id).appendChild(o)});
  }
  cabinets.forEach(c=>{const o=document.createElement('option');o.value=c.id;o.textContent=c.name+' ('+c.ip+')';el('cabinet').appendChild(o)});
- el('cabinet-list').innerHTML=cabinets.length?cabinets.map(c=>'<p>'+esc(c.name)+' — '+esc(c.ip)+' · '+esc(c.target)+' · firmware '+esc(c.firmware)+'</p>').join(''):'<p class="muted">No cabinets configured yet.</p>';
+ el('cabinet-list').innerHTML=cabinets.length?cabinets.map(c=>'<div class="panel"><strong>'+esc(c.name)+'</strong> — '+esc(c.ip)+' · '+esc(c.target)+' · firmware '+esc(c.firmware)+(c.power_entity?'<p>Power entity: '+esc(c.power_entity)+' · State: <span id="power-state-'+esc(c.id)+'">'+esc(c.power_state||'unknown')+'</span></p><button type="button" data-power="on" data-cabinet="'+esc(c.id)+'">POWER ON</button> <button type="button" data-power="off" data-cabinet="'+esc(c.id)+'">POWER OFF</button>':'<p class="muted">No Power entity configured.</p>')+'</div>').join(''):'<p class="muted">No cabinets configured yet.</p>';
  ['search','system','genre','orientation','controls'].forEach(id=>el(id).addEventListener(id==='search'?'input':'change',render));
  el('all-tab').onclick=()=>setMode('all');el('fave-tab').onclick=()=>setMode('favourites');el('editor-tab').onclick=()=>setMode('editor');el('setup-tab').onclick=()=>setMode('setup');
+ el('cabinet-list').addEventListener('click',handleCabinetPower);
  populateEditor();el('edit-rom').addEventListener('change',loadEditorEntry);el('catalogue-form').addEventListener('submit',saveCatalogueEntry);
  render();
+}
+async function handleCabinetPower(event){
+ const button=event.target.closest('[data-power]');if(!button)return;
+ const id=button.dataset.cabinet,action=button.dataset.power;
+ const cabinet=cabinets.find(c=>c.id===id);if(!cabinet)return;
+ if(action==='off'&&!confirm('Turn off '+cabinet.name+'? This cuts power to the cabinet.'))return;
+ button.disabled=true;
+ try{
+  const response=await fetch('/api/cabinets/'+encodeURIComponent(id)+'/power',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action})});
+  const result=await response.json();if(!response.ok||!result.ok)throw new Error(result.error||'Power command failed');
+  cabinet.power_state=result.state||action;
+  const state=el('power-state-'+id);if(state)state.textContent=cabinet.power_state;
+ }catch(error){alert('Power control failed: '+error.message)}
+ finally{button.disabled=false}
 }
 function setMode(m){mode=m;el('browser').classList.toggle('hidden',m==='setup'||m==='editor');el('setup').classList.toggle('hidden',m!=='setup');el('editor').classList.toggle('hidden',m!=='editor');el('all-tab').classList.toggle('active',m==='all');el('fave-tab').classList.toggle('active',m==='favourites');el('editor-tab').classList.toggle('active',m==='editor');el('setup-tab').classList.toggle('active',m==='setup');if(m==='editor')populateEditor();if(m==='all'||m==='favourites')render()}
 function render(){
