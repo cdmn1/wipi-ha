@@ -261,6 +261,8 @@ input{flex:1;min-width:220px}button{cursor:pointer;background:#087eb7;border-col
 <label class="muted"><input id="show-disabled" type="checkbox" onchange="filterGames()" style="min-width:auto;flex:0"> Show disabled</label>
 <select id="cabinet"><option value="">Choose cabinet…</option></select>
 <button id="test-cabinet" type="button">TEST CONNECTION</button>
+<span id="power-status" class="muted"></span>
+<button id="power-on" type="button">POWER ON</button><button id="power-off" type="button">POWER OFF</button>
 </div>
 <div class="muted" id="summary">Loading game list…</div>
 <div id="job" class="job"></div>
@@ -282,6 +284,10 @@ async function init(){
  const cabinetSelect=document.getElementById('cabinet');
  cabinets.forEach(cabinet=>{const o=document.createElement('option');o.value=cabinet.id;o.textContent=cabinet.name+' ('+cabinet.ip+')';cabinetSelect.appendChild(o)});
  document.getElementById('test-cabinet').addEventListener('click',testCabinet);
+ document.getElementById('cabinet').addEventListener('change',refreshCabinetPower);
+ document.getElementById('power-on').addEventListener('click',()=>setCabinetPower('on'));
+ document.getElementById('power-off').addEventListener('click',()=>setCabinetPower('off'));
+ refreshCabinetPower();
  filterGames();
 }
 function filterGames(){
@@ -299,6 +305,24 @@ function filterGames(){
   return '<article class="card"><div class="art">'+art+'</div>'+video+'<div class="info"><div class="name">'+esc(x.name)+fav+'</div><div class="meta">'+esc(x.system)+' · '+esc(x.year)+' · '+esc(x.genre)+'<br>'+esc(x.orientation)+' · '+esc(x.controls)+disabled+'</div>'+button+'</div></article>';
  }).join('');
  document.querySelectorAll('[data-rom]').forEach(button=>button.addEventListener('click',()=>launchGame(button.dataset.rom)));
+}
+async function refreshCabinetPower(){
+ const cabinet=cabinets.find(c=>c.id===document.getElementById('cabinet').value);
+ const status=document.getElementById('power-status'),on=document.getElementById('power-on'),off=document.getElementById('power-off');
+ const enabled=!!(cabinet&&cabinet.power_entity);
+ status.textContent=enabled?'Power: '+(cabinet.power_state||'unknown'):(cabinet?'No power entity configured':'');
+ on.disabled=!enabled;off.disabled=!enabled;
+}
+async function setCabinetPower(action){
+ const id=document.getElementById('cabinet').value,cabinet=cabinets.find(c=>c.id===id);
+ if(!cabinet||!cabinet.power_entity)return;
+ if(action==='off'&&!confirm('Turn off '+cabinet.name+'? This cuts power to the cabinet.'))return;
+ const status=document.getElementById('power-status');status.textContent='Sending power '+action+'…';
+ try{
+  const response=await fetch('/api/cabinets/'+encodeURIComponent(id)+'/power',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action})});
+  const result=await response.json();if(!response.ok||!result.ok)throw new Error(result.error||'Power command failed');
+  cabinet.power_state=result.state||action;status.textContent='Power: '+cabinet.power_state;
+ }catch(error){status.textContent='Power error: '+error.message}
 }
 async function testCabinet(){
  const cabinetId=document.getElementById('cabinet').value;
