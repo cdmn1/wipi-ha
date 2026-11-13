@@ -1,5 +1,5 @@
 name: WiPi Netbooter
-version: "0.2.6"
+version: "0.2.7"
 slug: wipi-netbooter
 description: WiPi-style Sega Naomi game browser and NetDIMM loader
 url: https://github.com/cdmn1/wipi-ha
@@ -18,10 +18,12 @@ ports:
 ports_description:
   8256/tcp: WiPi web interface
 options:
+  frontend: modern
   rom_path: /media/NAOMI
   cabinets: []
   disable_crc: false
 schema:
+  frontend: "list(modern|classic)"
   rom_path: str
   cabinets:
     - name: str
