@@ -9,6 +9,8 @@ import logging
 import os
 import threading
 import uuid
+import urllib.error
+import urllib.request
 from pathlib import Path
 from typing import Any
 
@@ -65,6 +67,7 @@ def cabinets() -> list[dict[str, str]]:
             address = str(entry.get("ip", "")).strip()
             target = str(entry.get("target", "naomi")).strip().lower()
             firmware = str(entry.get("firmware", "4.01")).strip()
+            power_entity = str(entry.get("power_entity", "")).strip()
         else:
             fields = [part.strip() for part in str(entry).split("|")]
             if len(fields) < 2:
@@ -72,6 +75,7 @@ def cabinets() -> list[dict[str, str]]:
             name, address = fields[0], fields[1]
             target = fields[2].lower() if len(fields) > 2 and fields[2] else "naomi"
             firmware = fields[3] if len(fields) > 3 and fields[3] else "4.01"
+            power_entity = ""
         if not name or not address:
             continue
         try:
@@ -81,7 +85,8 @@ def cabinets() -> list[dict[str, str]]:
         if target not in {"naomi", "chihiro", "triforce"}:
             continue
         result.append({"id": str(index), "name": name, "ip": address,
-                       "target": target, "firmware": firmware})
+                       "target": target, "firmware": firmware,
+                       "power_entity": power_entity if power_entity.startswith("switch.") else ""})
     return result
 
 
@@ -349,9 +354,66 @@ def api_games():
         return jsonify(games=[], error=str(exc), rom_path=None)
 
 
+def supervisor_api(method: str, endpoint: str, payload: dict[str, Any] | None = None) -> Any:
+    token = os.environ.get("SUPERVISOR_TOKEN", "")
+    if not token:
+        raise RuntimeError("Home Assistant API access is not enabled for this app.")
+    data = json.dumps(payload).encode("utf-8") if payload is not None else None
+    req = urllib.request.Request(
+        "http://supervisor/core/api/" + endpoint.lstrip("/"),
+        data=data, method=method,
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=8) as response:
+            raw = response.read()
+            return json.loads(raw.decode("utf-8")) if raw else None
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"Home Assistant returned HTTP {exc.code}: {detail[:200]}") from exc
+    except (urllib.error.URLError, TimeoutError) as exc:
+        raise RuntimeError(f"Could not contact Home Assistant: {exc}") from exc
+
+
+def cabinet_power_state(cabinet: dict[str, str]) -> str:
+    entity = cabinet.get("power_entity", "")
+    if not entity:
+        return ""
+    try:
+        state = supervisor_api("GET", f"states/{entity}")
+        return str(state.get("state", "unavailable"))
+    except Exception as exc:
+        LOG.warning("Could not read power state for %s: %s", cabinet["name"], exc)
+        return "unavailable"
+
+
 @app.get("/api/cabinets")
 def api_cabinets():
-    return jsonify(cabinets=cabinets())
+    configured = cabinets()
+    for cabinet in configured:
+        cabinet["power_state"] = cabinet_power_state(cabinet) if cabinet["power_entity"] else ""
+    return jsonify(cabinets=configured)
+
+
+@app.post("/api/cabinets/<cabinet_id>/power")
+def api_cabinet_power(cabinet_id: str):
+    selected = next((cabinet for cabinet in cabinets() if cabinet["id"] == cabinet_id), None)
+    if selected is None:
+        return jsonify(ok=False, error="Select a configured cabinet."), 400
+    entity = selected.get("power_entity", "")
+    if not entity:
+        return jsonify(ok=False, error="No Power entity is configured for this cabinet."), 400
+    body = request.get_json(silent=True) or {}
+    action = str(body.get("action", "")).lower()
+    if action not in {"on", "off"}:
+        return jsonify(ok=False, error="Power action must be on or off."), 400
+    try:
+        supervisor_api("POST", f"services/switch/turn_{action}", {"entity_id": entity})
+        return jsonify(ok=True, message=f"{selected['name']} power {action} command sent.",
+                       state=cabinet_power_state(selected))
+    except Exception as exc:
+        LOG.warning("Power %s failed for %s: %s", action, selected["name"], exc)
+        return jsonify(ok=False, error=str(exc)), 502
 
 
 @app.post("/api/catalogue")
