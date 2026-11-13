@@ -132,6 +132,7 @@ def discover_games() -> tuple[list[dict[str, Any]], str | None]:
                     "orientation": row.get("orientation", ""),
                     "controls": row.get("controls", ""),
                     "image": row.get("image", ""),
+                    "video": row.get("video", ""),
                     "catalogued": bool(row),
                 })
     except OSError as exc:
@@ -208,7 +209,7 @@ input{flex:1;min-width:220px}button{cursor:pointer;background:#087eb7;border-col
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:16px}
 .card{background:#1b2a35;border:1px solid #344b5a;border-radius:10px;overflow:hidden}
 .art{height:132px;background:#243d4d;display:flex;align-items:center;justify-content:center;color:#9ab5c5}
-.art img{width:100%;height:100%;object-fit:contain}.info{padding:13px}.name{font-weight:bold;font-size:16px}.meta{color:#a9bdc9;font-size:12px;margin:6px 0 12px}
+.art img{width:100%;height:100%;object-fit:contain}.preview{display:block;width:100%;max-height:180px;background:#000}.info{padding:13px}.name{font-weight:bold;font-size:16px}.meta{color:#a9bdc9;font-size:12px;margin:6px 0 12px}
 .card button{width:100%;padding:9px}.panel{background:#1b2a35;border:1px solid #344b5a;border-radius:10px;padding:16px;margin:0 0 18px}
 .muted{color:#a9bdc9}.good{color:#8bd5a5}.bad{color:#ffaaa2}.job{margin-top:12px;line-height:1.5}
 @media(max-width:520px){.top{padding:18px}h1{font-size:21px}}
@@ -249,7 +250,8 @@ function filterGames(){
  document.getElementById('summary').textContent=String(shown.length)+' of '+String(games.length)+' games';
  document.getElementById('games').innerHTML=shown.map(x=>{
   const art=x.image?'<img loading="lazy" src="/art/'+encodeURIComponent(x.image)+'" onerror="this.remove()">':'NAOMI';
-  return '<article class="card"><div class="art">'+art+'</div><div class="info"><div class="name">'+esc(x.name)+'</div><div class="meta">'+esc(x.system)+' · '+esc(x.year)+' · '+esc(x.genre)+'</div><button data-rom="'+encodeURIComponent(x.filename)+'" '+(cabinets.length?'':'disabled')+'>LOAD GAME</button></div></article>';
+  const video=x.video?'<video class="preview" controls preload="none" playsinline src="/video/'+encodeURIComponent(x.video)+'"></video>':'';
+  return '<article class="card"><div class="art">'+art+'</div>'+video+'<div class="info"><div class="name">'+esc(x.name)+'</div><div class="meta">'+esc(x.system)+' · '+esc(x.year)+' · '+esc(x.genre)+'</div><button data-rom="'+encodeURIComponent(x.filename)+'" '+(cabinets.length?'':'disabled')+'>LOAD GAME</button></div></article>';
  }).join('');
  document.querySelectorAll('[data-rom]').forEach(button=>button.addEventListener('click',()=>launchGame(button.dataset.rom)));
 }
@@ -300,17 +302,24 @@ def api_cabinets():
 
 @app.get("/art/<path:filename>")
 def artwork(filename: str):
+    return serve_asset(filename, ("images", "artwork", "img"))
+
+
+@app.get("/video/<path:filename>")
+def video_preview(filename: str):
+    return serve_asset(filename, ("videos", "video"))
+
+
+def serve_asset(filename: str, subfolders: tuple[str, ...]):
     if Path(filename).name != filename:
         abort(404)
     try:
         folder = rom_folder()
     except ValueError:
         abort(404)
-    candidates = []
-    for root in (folder, folder.parent):
-        for subfolder in ("images", "artwork", "img"):
-            candidates.append(root / subfolder)
-    for candidate in candidates:
+    # Assets are stored inside the configured ROM folder.
+    for subfolder in subfolders:
+        candidate = folder / subfolder
         if (candidate / filename).is_file():
             return send_from_directory(candidate, filename)
     abort(404)
