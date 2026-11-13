@@ -28,7 +28,7 @@ jobs:
           printf '{"rom_path":"/share/fileset/roms","cabinets":[{"name":"Test cabinet","ip":"127.0.0.1","target":"naomi","firmware":"4.01"}],"disable_crc":false}' > test-options.json
           docker run -d --name wipi-ha-test -p 8256:8256 \
             -v "$PWD/test-options.json:/data/options.json:ro" \
-            -v "$PWD/test-share:/share:ro" wipi-ha:test
+            -v "$PWD/test-share:/share" wipi-ha:test
           for attempt in $(seq 1 30); do
             if curl -fsS http://127.0.0.1:8256/api/status >/tmp/status.json; then break; fi
             sleep 1
@@ -39,6 +39,11 @@ jobs:
           curl -fsS http://127.0.0.1:8256/classic >/dev/null
           curl -fsS http://127.0.0.1:8256/api/games >/tmp/games.json
           python3 -c 'import json; d=json.load(open("/tmp/games.json")); assert len(d["games"]) == 1 and d["games"][0]["name"] == "Sample Game" and d["games"][0]["genre"] == "Action"'
+          curl -fsS -X POST http://127.0.0.1:8256/api/catalogue -H 'Content-Type: application/json' -d '{"romname":"sample.bin","description":"Edited Sample","system":"Sega Naomi","manufacturer":"Test","year":"2000","genre":"Action","orientation":"Horizontal","controls":"Digital (Stick)","enabled":true,"favourite":true}' >/tmp/catalogue.json
+          python3 -c 'import json; d=json.load(open("/tmp/catalogue.json")); assert d["ok"]'
+          curl -fsS http://127.0.0.1:8256/api/games >/tmp/updated-games.json
+          python3 -c 'import json; g=json.load(open("/tmp/updated-games.json"))["games"][0]; assert g["name"] == "Edited Sample" and g["favourite"] and g["catalogued"]'
+          python3 -c 'import csv; p="test-share/fileset/csv/romsinfo.csv"; f=open(p,newline=""); r=csv.reader(f); h=next(r); assert h == ["system","romname","image","video","description","lcd_description","manufacturer","year","genre","rating","orientation","controls","enabled","favourite","openjvs","openffb","game_id","audit_name"]'
           docker rm -f wipi-ha-test
       - name: Cleanup
         if: always()
