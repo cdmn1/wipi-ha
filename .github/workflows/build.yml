@@ -25,7 +25,7 @@ jobs:
           mkdir -p test-share/fileset/roms test-share/fileset/csv
           printf 'sample ROM' > test-share/fileset/roms/sample.bin
           printf 'system,romname,image,video,description,lcd_description,manufacturer,year,genre,rating,orientation,controls,enabled,favourite,openjvs,openffb,game_id,audit_name\n"Sega Naomi",sample.bin,sample.png,,Sample Game,,Test,2000,Action,,Horizontal,Digital,Yes,No,,,,\n' > test-share/fileset/csv/romsinfo.csv
-          printf '{"frontend":"classic","rom_path":"/share/fileset/roms","cabinets":[{"name":"Test cabinet","ip":"127.0.0.1","target":"naomi","firmware":"4.01"}],"disable_crc":false}' > test-options.json
+          printf '{"frontend":"classic","rom_path":"/share/fileset/roms","cabinets":[{"name":"Test cabinet","ip":"127.0.0.1","target":"naomi","firmware":"4.01","power_entity":"switch.arcade"}],"disable_crc":false}' > test-options.json
           docker run -d --name wipi-ha-test -p 8256:8256 \
             -v "$PWD/test-options.json:/data/options.json:ro" \
             -v "$PWD/test-share:/share" wipi-ha:test
@@ -35,17 +35,24 @@ jobs:
           done
           cat /tmp/status.json
           python3 -c 'import json; d=json.load(open("/tmp/status.json")); assert d["ok"] and d["cabinet_count"] == 1'
+          curl -fsS http://127.0.0.1:8256/api/cabinets >/tmp/cabinets.json
+          python3 -c 'import json; c=json.load(open("/tmp/cabinets.json"))["cabinets"][0]; assert c["power_entity"] == "switch.arcade" and c["power_state"] == "unavailable"'
+          curl -sS -o /tmp/power.json -w '%{http_code}' -X POST http://127.0.0.1:8256/api/cabinets/0/power -H 'Content-Type: application/json' -d '{"action":"on"}' >/tmp/power-code
+          python3 -c 'import json; assert open("/tmp/power-code").read() == "502"; assert "not enabled" in json.load(open("/tmp/power.json"))["error"]'
           curl -fsS http://127.0.0.1:8256/ >/tmp/home.html
           grep -q 'CLASSIC INTERFACE' /tmp/home.html
           curl -fsS http://127.0.0.1:8256/classic >/tmp/classic.html
           grep -q '<h2>Catalog editor</h2>' /tmp/classic.html
           grep -q 'CATALOG EDITOR' /tmp/classic.html
+          grep -q 'data-power="on"' /tmp/classic.html
           grep -q 'SAVE CATALOG ENTRY' /tmp/classic.html
           grep -q 'romBase=g.filename.replace' /tmp/classic.html
           grep -q '<select id="edit-system"' /tmp/classic.html
           ! grep -q 'LCD description' /tmp/classic.html
           curl -fsS http://127.0.0.1:8256/modern >/tmp/modern.html
           grep -q 'Open Classic interface' /tmp/modern.html
+          grep -q 'POWER ON' /tmp/modern.html
+          grep -q 'setCabinetPower' /tmp/modern.html
           curl -fsS http://127.0.0.1:8256/api/games >/tmp/games.json
           python3 -c 'import json; d=json.load(open("/tmp/games.json")); assert len(d["games"]) == 1 and d["games"][0]["name"] == "Sample Game" and d["games"][0]["genre"] == "Action" and d["systems"] == ["Sega Naomi"]'
           curl -fsS -X POST http://127.0.0.1:8256/api/catalogue -H 'Content-Type: application/json' -d '{"romname":"sample.bin","description":"Edited Sample","system":"Sega Naomi","manufacturer":"Test","year":"2000","genre":"Action","orientation":"Horizontal","controls":"Digital (Stick)","enabled":true,"favourite":true}' >/tmp/catalogue.json
