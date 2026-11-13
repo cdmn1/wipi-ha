@@ -1,11 +1,12 @@
 name: WiPi Netbooter
-version: "0.2.9"
+version: "0.3.0"
 slug: wipi-netbooter
 description: WiPi-style Sega Naomi game browser and NetDIMM loader
 url: https://github.com/cdmn1/wipi-ha
 arch:
   - amd64
 startup: application
+homeassistant_api: true
 boot: auto
 webui: "http://[HOST]:[PORT:8256]"
 map:
@@ -30,4 +31,5 @@ schema:
       ip: str
       target: "list(naomi|chihiro|triforce)"
       firmware: "list(1.02|2.03|2.06|2.13|2.17|3.01|3.03|3.12|3.17|4.01|4.02)"
+      power_entity: str?
   disable_crc: bool
