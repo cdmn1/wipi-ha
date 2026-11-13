@@ -218,7 +218,7 @@ input{flex:1;min-width:220px}button{cursor:pointer;background:#087eb7;border-col
 .muted{color:#a9bdc9}.good{color:#8bd5a5}.bad{color:#ffaaa2}.job{margin-top:12px;line-height:1.5}
 @media(max-width:520px){.top{padding:18px}h1{font-size:21px}}
 </style></head><body>
-<header class="top"><h1>WiPi NETBOOTER</h1><div class="tag">SEGA NAOMI · NETDIMM MANAGER</div></header>
+<header class="top"><h1>WiPi NETBOOTER</h1><div class="tag">SEGA NAOMI · NETDIMM MANAGER</div><div style="margin-top:10px"><a href="/classic" style="color:#91cce9">Open Classic interface</a></div></header>
 <main>
 <section class="panel">
 <div class="toolbar">
@@ -299,6 +299,12 @@ init().catch(e=>document.getElementById('summary').textContent='Could not load g
 @app.get("/")
 def index():
     return render_template_string(PAGE)
+
+
+@app.get("/classic")
+def classic_index():
+    classic_page = Path(__file__).with_name("classic.html").read_text(encoding="utf-8")
+    return render_template_string(classic_page)
 
 
 @app.get("/api/games")
