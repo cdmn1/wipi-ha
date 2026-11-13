@@ -35,7 +35,9 @@ Implemented:
 - Editable ROM folder path in the Configuration tab.
 - Multiple cabinet entries in Configuration.
 - WiPi-compatible CSV catalogue matching and optional artwork discovery.
-- Search and system/genre filters in the browser.
+- Search and system, genre, orientation and controls filters in the browser.
+- WiPi-compatible enabled/disabled and favourite catalogue handling.
+- Optional favourite-only and show-disabled views.
 - Cabinet selection, NetDIMM connection test, and send/reboot workflow.
 - CI build, Python syntax, package API, web UI and catalogue smoke tests.
 
