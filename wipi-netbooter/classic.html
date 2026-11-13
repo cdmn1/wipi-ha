@@ -112,8 +112,10 @@ function loadEditorEntry(){
  el('edit-system').value=systemsForEditor().includes(g.system)?g.system:'';
  el('edit-manufacturer').value=g.manufacturer||'';el('edit-year').value=g.year||'';
  el('edit-genre').value=g.genre||'';el('edit-orientation').value=g.orientation||'';
- el('edit-controls').value=g.controls||'';el('edit-image').value=g.image||'';
- el('edit-video').value=g.video||'';
+ el('edit-controls').value=g.controls||'';
+ const romBase=g.filename.replace(/\.bin\.gz$|\.bin$|\.dat$/i,'');
+ el('edit-image').value=g.image||(g.catalogued?'':romBase+'.png');
+ el('edit-video').value=g.video||(g.catalogued?'':romBase+'.mp4');
  el('edit-rating').value=g.rating||'';el('edit-enabled').checked=!!g.enabled;
  el('edit-favourite').checked=!!g.favourite;el('editor-status').textContent=g.catalogued?'Editing existing CSV entry.':'This ROM is not yet in the catalogue.';
 }
