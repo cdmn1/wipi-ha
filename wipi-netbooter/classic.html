@@ -33,7 +33,7 @@ video{max-width:100%;max-height:220px;background:#000}.launch{margin-top:12px}.m
 </head>
 <body>
 <header><div class="brand">WiPi NETBOOTER</div><div class="sub">CLASSIC INTERFACE · SEGA NAOMI NETDIMM</div><div style="margin-top:8px"><a href="/modern" style="color:#91cce9">Open Modern interface</a></div>
-<nav><button id="all-tab" class="active">GAME LIST</button><button id="fave-tab">FAVOURITES</button><button id="editor-tab">CATALOGUE EDITOR</button><button id="setup-tab">CABINET STATUS</button></nav></header>
+<nav><button id="all-tab" class="active">GAME LIST</button><button id="fave-tab">FAVOURITES</button><button id="editor-tab">CATALOG EDITOR</button><button id="setup-tab">CABINET STATUS</button></nav></header>
 <main>
 <section id="setup" class="hidden"><h2>NetDIMM cabinets</h2><p class="muted">Cabinet addresses and firmware are managed in the Home Assistant app Configuration tab.</p><div id="cabinet-list"></div></section>
 <section id="editor" class="hidden">
@@ -53,7 +53,7 @@ video{max-width:100%;max-height:220px;background:#000}.launch{margin-top:12px}.m
 
 <label>Rating<input id="edit-rating"></label>
 <div class="checks"><label><input id="edit-enabled" type="checkbox" checked> Enabled</label><label><input id="edit-favourite" type="checkbox"> Favourite</label></div>
-<button class="launch" type="submit">SAVE CATALOGUE ENTRY</button><div id="editor-status" class="muted"></div>
+<button class="launch" type="submit">SAVE CATALOG ENTRY</button><div id="editor-status" class="muted"></div>
 </form>
 </section>
 <section id="browser">
@@ -69,11 +69,11 @@ video{max-width:100%;max-height:220px;background:#000}.launch{margin-top:12px}.m
 </section>
 </main>
 <script>
-let games=[],cabinets=[],mode='all',selected=null;
+let games=[],cabinets=[],catalogueSystems=[],mode='all',selected=null;
 const el=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 async function init(){
- const gd=await (await fetch('/api/games')).json();games=gd.games||[];
+ const gd=await (await fetch('/api/games')).json();games=gd.games||[];catalogueSystems=gd.systems||[];
  const cd=await (await fetch('/api/cabinets')).json();cabinets=cd.cabinets||[];
  for(const [id,key] of [['system','system'],['genre','genre'],['orientation','orientation'],['controls','controls']]){
   [...new Set(games.map(g=>g[key]).filter(Boolean))].sort().forEach(v=>{const o=document.createElement('option');o.value=v;o.textContent=v;el(id).appendChild(o)});
@@ -96,9 +96,8 @@ function render(){
 }
 function populateEditor(){
  const systemSelect=el('edit-system'),currentSystem=systemSelect.value;
- const systems=[...new Set(games.map(g=>g.system).filter(v=>v&&v!=='Unknown system'))].sort((a,b)=>a.localeCompare(b));
- if(!systems.length)systems.push('Sega Naomi');
- systemSelect.innerHTML=systems.map(v=>'<option value="'+esc(v)+'">'+esc(v)+'</option>').join('');
+ const systems=[...new Set([...catalogueSystems,...games.filter(g=>g.catalogued).map(g=>g.system)].filter(v=>v&&v!=='Unknown system'))].sort((a,b)=>a.localeCompare(b));
+ systemSelect.innerHTML='<option value="">Not set</option>'+systems.map(v=>'<option value="'+esc(v)+'">'+esc(v)+'</option>').join('');
  if(currentSystem&&systems.includes(currentSystem))systemSelect.value=currentSystem;
  const select=el('edit-rom'),previous=select.value;
  select.innerHTML=games.map(g=>'<option value="'+esc(g.filename)+'">'+esc(g.filename)+(g.catalogued?' · catalogued':' · not catalogued')+'</option>').join('');
@@ -110,7 +109,7 @@ function loadEditorEntry(){
  const g=games.find(x=>x.filename===el('edit-rom').value);
  if(!g)return;
  el('edit-description').value=g.description||g.name||'';
- el('edit-system').value=systemsForEditor().includes(g.system)?g.system:el('edit-system').options[0]?.value||'';
+ el('edit-system').value=systemsForEditor().includes(g.system)?g.system:'';
  el('edit-manufacturer').value=g.manufacturer||'';el('edit-year').value=g.year||'';
  el('edit-genre').value=g.genre||'';el('edit-orientation').value=g.orientation||'';
  el('edit-controls').value=g.controls||'';el('edit-image').value=g.image||'';
