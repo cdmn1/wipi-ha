@@ -97,6 +97,7 @@ function render(){
 function populateEditor(){
  const systemSelect=el('edit-system'),currentSystem=systemSelect.value;
  const systems=[...new Set(games.map(g=>g.system).filter(v=>v&&v!=='Unknown system'))].sort((a,b)=>a.localeCompare(b));
+ if(!systems.length)systems.push('Sega Naomi');
  systemSelect.innerHTML=systems.map(v=>'<option value="'+esc(v)+'">'+esc(v)+'</option>').join('');
  if(currentSystem&&systems.includes(currentSystem))systemSelect.value=currentSystem;
  const select=el('edit-rom'),previous=select.value;
@@ -104,11 +105,12 @@ function populateEditor(){
  if(previous&&games.some(g=>g.filename===previous))select.value=previous;
  loadEditorEntry();
 }
+function systemsForEditor(){return [...el('edit-system').options].map(option=>option.value)}
 function loadEditorEntry(){
  const g=games.find(x=>x.filename===el('edit-rom').value);
  if(!g)return;
  el('edit-description').value=g.description||g.name||'';
- el('edit-system').value=g.system==='Unknown system'?'Sega Naomi':g.system;
+ el('edit-system').value=systemsForEditor().includes(g.system)?g.system:el('edit-system').options[0]?.value||'';
  el('edit-manufacturer').value=g.manufacturer||'';el('edit-year').value=g.year||'';
  el('edit-genre').value=g.genre||'';el('edit-orientation').value=g.orientation||'';
  el('edit-controls').value=g.controls||'';el('edit-image').value=g.image||'';
