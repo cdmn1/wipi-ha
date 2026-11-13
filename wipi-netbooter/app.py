@@ -131,6 +131,10 @@ def discover_games() -> tuple[list[dict[str, Any]], str | None]:
                     "genre": row.get("genre", ""),
                     "orientation": row.get("orientation", ""),
                     "controls": row.get("controls", ""),
+                    "rating": row.get("rating", ""),
+                    "lcd_description": row.get("lcd_description", ""),
+                    "enabled": (row.get("enabled", "Yes") or "Yes").strip().lower() == "yes",
+                    "favourite": (row.get("favourite", "") or "").strip().lower() == "yes",
                     "image": row.get("image", ""),
                     "video": row.get("video", ""),
                     "catalogued": bool(row),
@@ -221,6 +225,10 @@ input{flex:1;min-width:220px}button{cursor:pointer;background:#087eb7;border-col
 <input id="search" placeholder="Search games..." oninput="filterGames()">
 <select id="system" onchange="filterGames()"><option value="">All systems</option></select>
 <select id="genre" onchange="filterGames()"><option value="">All genres</option></select>
+<select id="orientation" onchange="filterGames()"><option value="">All orientations</option></select>
+<select id="controls" onchange="filterGames()"><option value="">All controls</option></select>
+<label class="muted"><input id="favourites" type="checkbox" onchange="filterGames()" style="min-width:auto;flex:0"> Favourites</label>
+<label class="muted"><input id="show-disabled" type="checkbox" onchange="filterGames()" style="min-width:auto;flex:0"> Show disabled</label>
 <select id="cabinet"><option value="">Choose cabinet…</option></select>
 <button id="test-cabinet" type="button">TEST CONNECTION</button>
 </div>
@@ -237,7 +245,9 @@ async function init(){
  document.getElementById('summary').textContent=d.error||String(games.length)+' game files found · ROM folder: '+(d.rom_path||'unavailable');
  const systems=[...new Set(games.map(g=>g.system).filter(Boolean))].sort();
  const genres=[...new Set(games.map(g=>g.genre).filter(Boolean))].sort();
- for(const pair of [['system',systems],['genre',genres]]) for(const v of pair[1]){const o=document.createElement('option');o.value=v;o.textContent=v;document.getElementById(pair[0]).appendChild(o)}
+ const orientations=[...new Set(games.map(g=>g.orientation).filter(Boolean))].sort();
+ const controls=[...new Set(games.map(g=>g.controls).filter(Boolean))].sort();
+ for(const pair of [['system',systems],['genre',genres],['orientation',orientations],['controls',controls]]) for(const v of pair[1]){const o=document.createElement('option');o.value=v;o.textContent=v;document.getElementById(pair[0]).appendChild(o)}
  const c=await fetch('/api/cabinets'); cabinets=(await c.json()).cabinets||[];
  const cabinetSelect=document.getElementById('cabinet');
  cabinets.forEach(cabinet=>{const o=document.createElement('option');o.value=cabinet.id;o.textContent=cabinet.name+' ('+cabinet.ip+')';cabinetSelect.appendChild(o)});
@@ -246,12 +256,17 @@ async function init(){
 }
 function filterGames(){
  const q=document.getElementById('search').value.toLowerCase(),s=document.getElementById('system').value,g=document.getElementById('genre').value;
- const shown=games.filter(x=>(!q||(x.name+' '+x.filename+' '+x.manufacturer).toLowerCase().includes(q))&&(!s||x.system===s)&&(!g||x.genre===g));
+ const o=document.getElementById('orientation').value,c=document.getElementById('controls').value;
+ const favourites=document.getElementById('favourites').checked,showDisabled=document.getElementById('show-disabled').checked;
+ const shown=games.filter(x=>(showDisabled||x.enabled)&&(!favourites||x.favourite)&&(!q||(x.name+' '+x.filename+' '+x.manufacturer).toLowerCase().includes(q))&&(!s||x.system===s)&&(!g||x.genre===g)&&(!o||x.orientation===o)&&(!c||x.controls===c));
  document.getElementById('summary').textContent=String(shown.length)+' of '+String(games.length)+' games';
  document.getElementById('games').innerHTML=shown.map(x=>{
   const art=x.image?'<img loading="lazy" src="/art/'+encodeURIComponent(x.image)+'" onerror="this.remove()">':'NAOMI';
   const video=x.video?'<video class="preview" controls preload="none" playsinline src="/video/'+encodeURIComponent(x.video)+'"></video>':'';
-  return '<article class="card"><div class="art">'+art+'</div>'+video+'<div class="info"><div class="name">'+esc(x.name)+'</div><div class="meta">'+esc(x.system)+' · '+esc(x.year)+' · '+esc(x.genre)+'</div><button data-rom="'+encodeURIComponent(x.filename)+'" '+(cabinets.length?'':'disabled')+'>LOAD GAME</button></div></article>';
+  const fav=x.favourite?' ★':'';
+  const disabled=x.enabled?'':' · DISABLED';
+  const button=x.enabled?'<button data-rom="'+encodeURIComponent(x.filename)+'" '+(cabinets.length?'':'disabled')+'>LOAD GAME</button>':'<button disabled>DISABLED IN CATALOGUE</button>';
+  return '<article class="card"><div class="art">'+art+'</div>'+video+'<div class="info"><div class="name">'+esc(x.name)+fav+'</div><div class="meta">'+esc(x.system)+' · '+esc(x.year)+' · '+esc(x.genre)+'<br>'+esc(x.orientation)+' · '+esc(x.controls)+disabled+'</div>'+button+'</div></article>';
  }).join('');
  document.querySelectorAll('[data-rom]').forEach(button=>button.addEventListener('click',()=>launchGame(button.dataset.rom)));
 }
