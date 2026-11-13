@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>WiPi Netbooter — Classic</title>
+<style>
+:root{color-scheme:dark;font-family:Arial,Helvetica,sans-serif;background:#080f18;color:#e9f2f8}
+*{box-sizing:border-box}body{margin:0;background:linear-gradient(#102c43,#07111d 260px);min-height:100vh}
+header{background:#071a2a;border-bottom:3px solid #168ac4;padding:16px max(18px,calc((100% - 1180px)/2))}
+.brand{font-size:25px;font-weight:bold;letter-spacing:.12em}.sub{font-size:11px;letter-spacing:.25em;color:#69bde7;margin-top:5px}
+nav{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}nav button,.filter button,.launch{background:#155b83;border:1px solid #2a8cbd;color:#fff;padding:9px 15px;font-weight:bold;cursor:pointer}
+nav button.active{background:#e2edf4;color:#102536;border-color:#fff}
+main{max-width:1180px;margin:22px auto;padding:0 18px}.filters{display:flex;gap:9px;flex-wrap:wrap;margin:0 0 18px}
+input,select{background:#102536;border:1px solid #527084;color:#fff;padding:10px;min-width:140px;flex:1}
+#search{min-width:220px}.count{color:#a8c1d0;font-size:13px;margin:8px 0 16px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(175px,1fr));gap:14px}
+.game{background:#102536;border:1px solid #31546a;text-align:center;padding:10px;cursor:pointer;min-width:0}
+.game:hover{border-color:#37b5ed;background:#18384e}.art{height:112px;background:#1b3a50;display:flex;align-items:center;justify-content:center;color:#9cb7c7;margin-bottom:9px}
+.art img{max-width:100%;max-height:100%;object-fit:contain}.gname{font-weight:bold;font-size:14px;min-height:34px}.meta{color:#9cb7c7;font-size:11px;margin-top:5px}
+#detail{display:none;background:#102536;border:1px solid #3d6b86;padding:18px;margin-bottom:18px}
+.detailrow{display:grid;grid-template-columns:minmax(180px,300px) 1fr;gap:20px}.detailrow img{max-width:100%;max-height:220px;object-fit:contain;background:#18384e}
+table{border-collapse:collapse;width:100%;margin:12px 0}td{border-bottom:1px solid #31546a;padding:8px}td:first-child{color:#83b9d5;width:130px}
+video{max-width:100%;max-height:220px;background:#000}.launch{margin-top:12px}.muted{color:#9cb7c7}.hidden{display:none}
+@media(max-width:620px){.detailrow{grid-template-columns:1fr}.brand{font-size:20px}}
+</style>
+</head>
+<body>
+<header><div class="brand">WiPi NETBOOTER</div><div class="sub">CLASSIC INTERFACE · SEGA NAOMI NETDIMM</div>
+<nav><button id="all-tab" class="active">GAME LIST</button><button id="fave-tab">FAVOURITES</button><button id="setup-tab">CABINET STATUS</button></nav></header>
+<main>
+<section id="setup" class="hidden"><h2>NetDIMM cabinets</h2><p class="muted">Cabinet addresses and firmware are managed in the Home Assistant app Configuration tab.</p><div id="cabinet-list"></div></section>
+<section id="browser">
+<div class="filters">
+<input id="search" placeholder="Search games…">
+<select id="system"><option value="">All systems</option></select>
+<select id="genre"><option value="">All genres</option></select>
+<select id="orientation"><option value="">All orientations</option></select>
+<select id="controls"><option value="">All controls</option></select>
+<select id="cabinet"><option value="">Choose cabinet…</option></select>
+</div>
+<div id="detail"></div><div class="count" id="count">Loading game list…</div><div class="grid" id="games"></div>
+</section>
+</main>
+<script>
+let games=[],cabinets=[],mode='all',selected=null;
+const el=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+async function init(){
+ const gd=await (await fetch('/api/games')).json();games=gd.games||[];
+ const cd=await (await fetch('/api/cabinets')).json();cabinets=cd.cabinets||[];
+ for(const [id,key] of [['system','system'],['genre','genre'],['orientation','orientation'],['controls','controls']]){
+  [...new Set(games.map(g=>g[key]).filter(Boolean))].sort().forEach(v=>{const o=document.createElement('option');o.value=v;o.textContent=v;el(id).appendChild(o)});
+ }
+ cabinets.forEach(c=>{const o=document.createElement('option');o.value=c.id;o.textContent=c.name+' ('+c.ip+')';el('cabinet').appendChild(o)});
+ el('cabinet-list').innerHTML=cabinets.length?cabinets.map(c=>'<p>'+esc(c.name)+' — '+esc(c.ip)+' · '+esc(c.target)+' · firmware '+esc(c.firmware)+'</p>').join(''):'<p class="muted">No cabinets configured yet.</p>';
+ ['search','system','genre','orientation','controls'].forEach(id=>el(id).addEventListener(id==='search'?'input':'change',render));
+ el('all-tab').onclick=()=>setMode('all');el('fave-tab').onclick=()=>setMode('favourites');el('setup-tab').onclick=()=>setMode('setup');
+ render();
+}
+function setMode(m){mode=m;el('browser').classList.toggle('hidden',m==='setup');el('setup').classList.toggle('hidden',m!=='setup');el('all-tab').classList.toggle('active',m==='all');el('fave-tab').classList.toggle('active',m==='favourites');el('setup-tab').classList.toggle('active',m==='setup');if(m!=='setup')render()}
+function render(){
+ if(mode==='setup')return;
+ const q=el('search').value.toLowerCase(),s=el('system').value,g=el('genre').value,o=el('orientation').value,c=el('controls').value;
+ const shown=games.filter(x=>x.enabled&&(mode!=='favourites'||x.favourite)&&(!q||(x.name+' '+x.filename+' '+x.manufacturer).toLowerCase().includes(q))&&(!s||x.system===s)&&(!g||x.genre===g)&&(!o||x.orientation===o)&&(!c||x.controls===c));
+ el('count').textContent=shown.length+' games · '+(mode==='favourites'?'Favourites':'All enabled games');
+ el('games').innerHTML=shown.map((x,i)=>'<article class="game" data-index="'+games.indexOf(x)+'"><div class="art">'+(x.image?'<img loading="lazy" src="/art/'+encodeURIComponent(x.image)+'" onerror="this.remove()">':'NAOMI')+'</div><div class="gname">'+esc(x.name)+(x.favourite?' ★':'')+'</div><div class="meta">'+esc(x.system)+' · '+esc(x.year)+'<br>'+esc(x.genre)+'</div></article>').join('');
+ document.querySelectorAll('[data-index]').forEach(node=>node.onclick=()=>showDetail(games[Number(node.dataset.index)]));
+}
+function showDetail(x){
+ selected=x;const cabinetOptions=cabinets.map(c=>'<option value="'+esc(c.id)+'">'+esc(c.name)+'</option>').join('');
+ el('detail').style.display='block';
+ el('detail').innerHTML='<div class="detailrow"><div>'+(x.image?'<img src="/art/'+encodeURIComponent(x.image)+'">':'<div class="art">NAOMI</div>')+(x.video?'<video controls playsinline preload="none" src="/video/'+encodeURIComponent(x.video)+'"></video>':'')+'</div><div><h2>'+esc(x.name)+(x.favourite?' ★':'')+'</h2><table><tr><td>System</td><td>'+esc(x.system)+'</td></tr><tr><td>Manufacturer</td><td>'+esc(x.manufacturer)+'</td></tr><tr><td>Year</td><td>'+esc(x.year)+'</td></tr><tr><td>Genre</td><td>'+esc(x.genre)+'</td></tr><tr><td>Controls</td><td>'+esc(x.controls)+'</td></tr><tr><td>Orientation</td><td>'+esc(x.orientation)+'</td></tr><tr><td>ROM</td><td>'+esc(x.filename)+'</td></tr></table><label class="muted">Load to cabinet </label><select id="detail-cabinet">'+cabinetOptions+'</select><br><button class="launch" id="launch">LAUNCH GAME</button><div class="muted" id="load-status"></div></div></div>';
+ el('launch').disabled=!cabinets.length;el('launch').onclick=()=>launch(x.filename);
+ el('detail').scrollIntoView({behavior:'smooth',block:'start'});
+}
+async function launch(filename){
+ const cabinetId=el('detail-cabinet').value;if(!cabinetId){el('load-status').textContent='Choose a cabinet first.';return}
+ el('load-status').textContent='Sending ROM…';
+ const r=await fetch('/api/load',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({filename,cabinet_id:cabinetId})});
+ const d=await r.json();el('load-status').textContent=d.message||d.error||'Request submitted';
+ if(d.job_id)watch(d.job_id);
+}
+async function watch(id){for(let i=0;i<360;i++){await new Promise(r=>setTimeout(r,1000));const d=await(await fetch('/api/jobs/'+id)).json();el('load-status').textContent=d.status+': '+(d.message||'')+' '+(d.progress??0)+'%';if(['complete','error'].includes(d.status))return}}
+init().catch(e=>el('count').textContent='Could not load catalogue: '+e);
+</script>
+</body></html>
