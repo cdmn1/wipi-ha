@@ -40,6 +40,9 @@ JOBS: dict[str, dict[str, Any]] = {}
 JOBS_LOCK = threading.Lock()
 TIME_HACK_LOCK = threading.Lock()
 TIME_HACK_EVENTS: dict[str, threading.Event] = {}
+TIME_HACK_THREADS: dict[str, threading.Thread] = {}
+CABINET_LOAD_LOCKS: dict[str, threading.Lock] = {}
+CABINET_LOAD_LOCKS_LOCK = threading.Lock()
 TIME_HACK_INTERVAL = 5
 TIME_HACK_LIMIT_MS = 10 * 60 * 1000
 CATALOGUE_LOCK = threading.Lock()
@@ -276,15 +279,36 @@ def enum_value(enum_type: Any, value: str) -> Any:
     raise ValueError(f"Unsupported NetDIMM setting: {value}")
 
 
+def cabinet_load_lock(cabinet_id: str) -> threading.Lock:
+    with CABINET_LOAD_LOCKS_LOCK:
+        return CABINET_LOAD_LOCKS.setdefault(cabinet_id, threading.Lock())
+
+
+def stop_time_hack(cabinet: dict[str, str]) -> None:
+    """Stop the keepalive and wait until its NetDIMM TCP socket is closed."""
+    cabinet_id = cabinet["id"]
+    with TIME_HACK_LOCK:
+        stop_event = TIME_HACK_EVENTS.get(cabinet_id)
+        thread = TIME_HACK_THREADS.get(cabinet_id)
+        if stop_event:
+            stop_event.set()
+    if thread and thread.is_alive():
+        thread.join(timeout=7)
+        if thread.is_alive():
+            raise RuntimeError(f"Time Hack connection for {cabinet['name']} did not close; refusing to start another NetDIMM session.")
+    with TIME_HACK_LOCK:
+        if TIME_HACK_EVENTS.get(cabinet_id) is stop_event:
+            TIME_HACK_EVENTS.pop(cabinet_id, None)
+            TIME_HACK_THREADS.pop(cabinet_id, None)
+    if thread:
+        LOG.info("Time Hack stopped and connection closed for %s", cabinet["name"])
+
+
 def start_time_hack(cabinet: dict[str, str]) -> None:
     """Keep the original WiPi NetDIMM time limit alive without Pi dependencies."""
     cabinet_id = cabinet["id"]
+    stop_time_hack(cabinet)
     stop_event = threading.Event()
-    with TIME_HACK_LOCK:
-        previous = TIME_HACK_EVENTS.get(cabinet_id)
-        if previous:
-            previous.set()
-        TIME_HACK_EVENTS[cabinet_id] = stop_event
 
     def keepalive() -> None:
         packet = struct.pack("<II", 0x17000004, TIME_HACK_LIMIT_MS)
@@ -302,7 +326,11 @@ def start_time_hack(cabinet: dict[str, str]) -> None:
                     LOG.warning("Time Hack connection to %s failed; retrying: %s", cabinet["ip"], exc)
                     stop_event.wait(2)
 
-    threading.Thread(target=keepalive, name="time-hack-" + cabinet_id, daemon=True).start()
+    thread = threading.Thread(target=keepalive, name="time-hack-" + cabinet_id, daemon=True)
+    with TIME_HACK_LOCK:
+        TIME_HACK_EVENTS[cabinet_id] = stop_event
+        TIME_HACK_THREADS[cabinet_id] = thread
+    thread.start()
     LOG.info("Time Hack enabled for %s (10-minute limit refreshed every 5 seconds)", cabinet["name"])
 
 def perform_load(job_id: str, cabinet: dict[str, str], filename: str) -> None:
@@ -310,6 +338,12 @@ def perform_load(job_id: str, cabinet: dict[str, str], filename: str) -> None:
         with JOBS_LOCK:
             JOBS[job_id].update(values)
 
+    load_lock = cabinet_load_lock(cabinet["id"])
+    if not load_lock.acquire(blocking=False):
+        update(status="error", message=f"Another NetDIMM operation is already running for {cabinet['name']}.")
+        return
+
+    time_hack_paused = False
     try:
         rom = safe_rom(filename)
         update(status="preparing", message="Preparing ROM image", progress=0)
@@ -322,10 +356,20 @@ def perform_load(job_id: str, cabinet: dict[str, str], filename: str) -> None:
         data, applied_patches = apply_game_patches(data, filename, cabinet)
         if applied_patches:
             LOG.info("Applied game patches for %s: %s", filename, ", ".join(applied_patches))
+
+        # The Time Hack owns a persistent connection to TCP/10703. Close it
+        # completely before NetDimm opens its upload/control session.
+        stop_time_hack(cabinet)
+        time_hack_paused = True
+        LOG.info("Starting NetDIMM upload to %s for %s", cabinet["name"], filename)
+
         target = enum_value(NetDimmTargetEnum, cabinet["target"])
         version = enum_value(NetDimmVersionEnum, cabinet["firmware"])
         dimm = NetDimm(cabinet["ip"], version=version, target=target,
-                       log=lambda message, **kwargs: update(message=str(message)))
+                       log=lambda message, **kwargs: (
+                           LOG.info("NetDIMM %s: %s", cabinet["name"], message),
+                           update(message=str(message))
+                       ))
 
         def progress(sent: int, total: int) -> None:
             percent = int((sent / total) * 100) if total else 0
@@ -333,16 +377,24 @@ def perform_load(job_id: str, cabinet: dict[str, str], filename: str) -> None:
                    message=f"Uploading to {cabinet['name']}: {percent}%")
 
         update(status="uploading", message=f"Connecting to {cabinet['name']}", progress=0)
+        LOG.info("Calling NetDimm.send for %s", cabinet["name"])
         dimm.send(data, disable_crc_check=bool(options().get("disable_crc", False)),
                   progress_callback=progress)
         update(status="rebooting", message="Upload complete; rebooting cabinet", progress=100)
+        LOG.info("Upload complete; rebooting %s", cabinet["name"])
         dimm.reboot()
-        if bool(options().get("time_hack", True)):
-            start_time_hack(cabinet)
         update(status="complete", message=f"{cabinet['name']} is being booted", progress=100)
     except Exception as exc:
         LOG.exception("NetDIMM load failed for %s", cabinet.get("name", "cabinet"))
         update(status="error", message=str(exc))
+    finally:
+        if time_hack_paused and bool(options().get("time_hack", True)):
+            try:
+                start_time_hack(cabinet)
+            except Exception:
+                LOG.exception("Could not restart Time Hack for %s", cabinet["name"])
+        load_lock.release()
+
 
 
 PAGE = """<!doctype html>
