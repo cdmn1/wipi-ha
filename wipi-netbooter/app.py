@@ -54,6 +54,11 @@ PATCH_DEFINITIONS = {
         "description": "Allows this Japanese-only game to boot on Japanese, USA and Export NAOMI BIOS regions.",
         "game_ids": {"BCY0"},
     },
+    "illvelo_force_freeplay": {
+        "title": "Force Free Play (community patch)",
+        "description": "Applies the documented Illvelo Free Play patch. The original ROM file is never modified.",
+        "filename_stems": {"illvelo"},
+    },
 }
 CATALOGUE_COLUMNS = [
     "system", "romname", "image", "video", "description", "lcd_description",
@@ -230,10 +235,31 @@ def game_patch_options(game: dict[str, Any]) -> list[dict[str, Any]]:
     selected = set(load_patch_settings().get(game["filename"], []))
     result = []
     for patch_id, definition in PATCH_DEFINITIONS.items():
-        if game.get("game_id") in definition["game_ids"]:
+        game_id_match = game.get("game_id") in definition.get("game_ids", set())
+        filename = Path(game.get("filename", "")).name.lower()
+        stem_match = any(filename == stem or filename.startswith(stem + ".")
+                         for stem in definition.get("filename_stems", set()))
+        if game_id_match or stem_match:
             result.append({"id": patch_id, "title": definition["title"],
                            "description": definition["description"], "enabled": patch_id in selected})
     return result
+
+
+def apply_illvelo_force_freeplay(data: bytes) -> bytes:
+    """Apply DragonMinded's documented Illvelo Free Play byte patch."""
+    offset = 0x620C6
+    original = bytes.fromhex("42 84")
+    replacement = bytes.fromhex("1A E0")
+    if len(data) < offset + len(original):
+        raise ValueError("Illvelo ROM is too small for the documented Free Play patch.")
+    actual = data[offset:offset + len(original)]
+    if actual != original:
+        raise ValueError(
+            "Illvelo Free Play patch was not applied: ROM bytes at 0x620C6 "
+            f"are {actual.hex(' ').upper()}, expected {original.hex(' ').upper()}. "
+            "This ROM revision may not match the documented patch."
+        )
+    return data[:offset] + replacement + data[offset + len(replacement):]
 
 
 def apply_naomi_region_unlock(data: bytes) -> bytes:
@@ -267,6 +293,10 @@ def apply_game_patches(data: bytes, filename: str, cabinet: dict[str, str]) -> t
         if cabinet["target"] != "naomi":
             raise ValueError("The NAOMI region unlock is only supported on NAOMI cabinets.")
         data = apply_naomi_region_unlock(data)
+    if "illvelo_force_freeplay" in selected:
+        if cabinet["target"] != "naomi":
+            raise ValueError("The Illvelo Free Play patch is only supported on NAOMI cabinets.")
+        data = apply_illvelo_force_freeplay(data)
     return data, sorted(selected)
 
 
