@@ -13,6 +13,11 @@ import threading
 import uuid
 import urllib.error
 import urllib.request
+
+try:
+    from naomi import NaomiRom, NaomiRomRegionEnum
+except ImportError:
+    NaomiRom = NaomiRomRegionEnum = None
 from pathlib import Path
 from typing import Any
 
@@ -38,6 +43,15 @@ TIME_HACK_EVENTS: dict[str, threading.Event] = {}
 TIME_HACK_INTERVAL = 5
 TIME_HACK_LIMIT_MS = 10 * 60 * 1000
 CATALOGUE_LOCK = threading.Lock()
+PATCH_SETTINGS_FILE = Path("/data/patch_settings.json")
+PATCH_SETTINGS_LOCK = threading.Lock()
+PATCH_DEFINITIONS = {
+    "naomi_region_unlock": {
+        "title": "Region unlock (Japan / USA / Export)",
+        "description": "Allows this Japanese-only game to boot on Japanese, USA and Export NAOMI BIOS regions.",
+        "game_ids": {"BCY0"},
+    },
+}
 CATALOGUE_COLUMNS = [
     "system", "romname", "image", "video", "description", "lcd_description",
     "manufacturer", "year", "genre", "rating", "orientation", "controls",
@@ -174,6 +188,7 @@ def discover_games() -> tuple[list[dict[str, Any]], str | None]:
                     "image": row.get("image", ""),
                     "video": row.get("video", ""),
                     "catalogued": bool(row),
+                    "game_id": (row.get("game_id") or "").strip(),
                 })
     except OSError as exc:
         return [], f"Cannot read ROM folder: {exc}"
@@ -190,6 +205,66 @@ def safe_rom(filename: str) -> Path:
         if path.is_file() and any(path.name.lower().endswith(s) for s in ROM_SUFFIXES):
             return path
     raise FileNotFoundError("ROM file is not available.")
+
+
+def load_patch_settings() -> dict[str, list[str]]:
+    try:
+        raw = json.loads(PATCH_SETTINGS_FILE.read_text(encoding="utf-8"))
+        return {str(key): [str(item) for item in value if isinstance(item, str)]
+                for key, value in raw.items() if isinstance(value, list)}
+    except (OSError, json.JSONDecodeError, AttributeError):
+        return {}
+
+
+def save_patch_settings(settings: dict[str, list[str]]) -> None:
+    PATCH_SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    temporary = PATCH_SETTINGS_FILE.with_suffix(".tmp")
+    temporary.write_text(json.dumps(settings, indent=2, sort_keys=True), encoding="utf-8")
+    temporary.replace(PATCH_SETTINGS_FILE)
+
+
+def game_patch_options(game: dict[str, Any]) -> list[dict[str, Any]]:
+    selected = set(load_patch_settings().get(game["filename"], []))
+    result = []
+    for patch_id, definition in PATCH_DEFINITIONS.items():
+        if game.get("game_id") in definition["game_ids"]:
+            result.append({"id": patch_id, "title": definition["title"],
+                           "description": definition["description"], "enabled": patch_id in selected})
+    return result
+
+
+def apply_naomi_region_unlock(data: bytes) -> bytes:
+    if NaomiRom is None or NaomiRomRegionEnum is None:
+        raise RuntimeError("NAOMI ROM tools are unavailable; cannot apply the region unlock.")
+    rom = NaomiRom(data)
+    if not rom.valid:
+        raise ValueError("This image is not a valid NAOMI NetDIMM ROM; region unlock was not applied.")
+    regions = list(rom.regions)
+    for region in (NaomiRomRegionEnum.REGION_JAPAN,
+                   NaomiRomRegionEnum.REGION_USA,
+                   NaomiRomRegionEnum.REGION_EXPORT):
+        if region not in regions:
+            regions.append(region)
+    rom.regions = regions
+    return rom.data
+
+
+def apply_game_patches(data: bytes, filename: str, cabinet: dict[str, str]) -> tuple[bytes, list[str]]:
+    selected = set(load_patch_settings().get(filename, []))
+    if not selected:
+        return data, []
+    game = next((item for item in discover_games()[0] if item["filename"] == filename), None)
+    if not game:
+        raise ValueError("Game is no longer present in the ROM catalogue.")
+    allowed = {patch["id"] for patch in game_patch_options(game)}
+    unknown = selected - allowed
+    if unknown:
+        raise ValueError("Unsupported patch selection: " + ", ".join(sorted(unknown)))
+    if "naomi_region_unlock" in selected:
+        if cabinet["target"] != "naomi":
+            raise ValueError("The NAOMI region unlock is only supported on NAOMI cabinets.")
+        data = apply_naomi_region_unlock(data)
+    return data, sorted(selected)
 
 
 def enum_value(enum_type: Any, value: str) -> Any:
@@ -244,6 +319,9 @@ def perform_load(job_id: str, cabinet: dict[str, str], filename: str) -> None:
         else:
             data = rom.read_bytes()
 
+        data, applied_patches = apply_game_patches(data, filename, cabinet)
+        if applied_patches:
+            LOG.info("Applied game patches for %s: %s", filename, ", ".join(applied_patches))
         target = enum_value(NetDimmTargetEnum, cabinet["target"])
         version = enum_value(NetDimmVersionEnum, cabinet["firmware"])
         dimm = NetDimm(cabinet["ip"], version=version, target=target,
@@ -303,6 +381,7 @@ input{flex:1;min-width:220px}button{cursor:pointer;background:#087eb7;border-col
 </div>
 <div class="muted" id="summary">Loading game list…</div>
 <div id="job" class="job"></div>
+<div class="panel" id="patch-profile" hidden><strong id="patch-profile-title">Game patches</strong><div id="patch-profile-options"></div><button id="save-patch-profile" type="button">SAVE PATCH SETTINGS</button> <button id="close-patch-profile" type="button">CLOSE</button><span id="patch-profile-status" class="muted"></span></div>
 </section>
 <div class="grid" id="games"></div>
 </main>
@@ -339,9 +418,11 @@ function filterGames(){
   const fav=x.favourite?' ★':'';
   const disabled=x.enabled?'':' · DISABLED';
   const button=x.enabled?'<button data-rom="'+encodeURIComponent(x.filename)+'" '+(cabinets.length?'':'disabled')+'>LOAD GAME</button>':'<button disabled>DISABLED IN CATALOGUE</button>';
-  return '<article class="card"><div class="art">'+art+'</div>'+video+'<div class="info"><div class="name">'+esc(x.name)+fav+'</div><div class="meta">'+esc(x.system)+' · '+esc(x.year)+' · '+esc(x.genre)+'<br>'+esc(x.orientation)+' · '+esc(x.controls)+disabled+'</div>'+button+'</div></article>';
+  const profile=x.game_id==='BCY0'?'<button type="button" data-profile="'+encodeURIComponent(x.filename)+'">PATCH PROFILE</button>':'';
+  return '<article class="card"><div class="art">'+art+'</div>'+video+'<div class="info"><div class="name">'+esc(x.name)+fav+'</div><div class="meta">'+esc(x.system)+' · '+esc(x.year)+' · '+esc(x.genre)+'<br>'+esc(x.orientation)+' · '+esc(x.controls)+disabled+'</div>'+button+profile+'</div></article>';
  }).join('');
  document.querySelectorAll('[data-rom]').forEach(button=>button.addEventListener('click',()=>launchGame(button.dataset.rom)));
+ document.querySelectorAll('[data-profile]').forEach(button=>button.addEventListener('click',()=>openPatchProfile(button.dataset.profile)));
 }
 async function refreshCabinetPower(){
  const cabinet=cabinets.find(c=>c.id===document.getElementById('cabinet').value);
@@ -371,6 +452,32 @@ async function testCabinet(){
  panel.textContent=result.message||'Connection test finished.';
  panel.className='job '+(result.ok?'good':'bad');
 }
+let activePatchFilename='';
+async function openPatchProfile(encoded){
+ const filename=decodeURIComponent(encoded),panel=document.getElementById('patch-profile');
+ activePatchFilename=filename;panel.hidden=false;
+ document.getElementById('patch-profile-title').textContent='Patch profile: '+filename;
+ const options=document.getElementById('patch-profile-options'),status=document.getElementById('patch-profile-status');
+ options.textContent='Checking available patches…';status.textContent='';
+ try{
+  const response=await fetch('/api/games/'+encodeURIComponent(filename)+'/patches');
+  const result=await response.json();if(!response.ok)throw new Error(result.error||'Could not load patch profile');
+  options.innerHTML=result.patches.length?result.patches.map(p=>'<label style="display:block;margin:12px 0"><input type="checkbox" data-patch-id="'+esc(p.id)+'" '+(p.enabled?'checked':'')+'> <strong>'+esc(p.title)+'</strong><br><span class="muted">'+esc(p.description)+'</span></label>').join(''):'<p class="muted">No patches are currently available for this game.</p>';
+  document.getElementById('save-patch-profile').disabled=!result.patches.length;
+  panel.scrollIntoView({behavior:'smooth',block:'center'});
+ }catch(error){options.textContent=error.message;document.getElementById('save-patch-profile').disabled=true}
+}
+async function savePatchProfile(){
+ const selected=[...document.querySelectorAll('#patch-profile-options [data-patch-id]:checked')].map(x=>x.dataset.patchId);
+ const status=document.getElementById('patch-profile-status');status.textContent='Saving…';
+ try{
+  const response=await fetch('/api/games/'+encodeURIComponent(activePatchFilename)+'/patches',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({patches:selected})});
+  const result=await response.json();if(!response.ok||!result.ok)throw new Error(result.error||'Could not save patch settings');
+  status.textContent=result.message;
+ }catch(error){status.textContent='Error: '+error.message}
+}
+document.getElementById('save-patch-profile').addEventListener('click',savePatchProfile);
+document.getElementById('close-patch-profile').addEventListener('click',()=>{document.getElementById('patch-profile').hidden=true});
 async function launchGame(encoded){
  const filename=decodeURIComponent(encoded);
  const cabinetId=document.getElementById('cabinet').value;
@@ -581,6 +688,44 @@ def api_test_cabinet(cabinet_id: str):
     except Exception as exc:
         LOG.warning("NetDIMM connection test failed for %s: %s", selected["name"], exc)
         return jsonify(ok=False, message=f"Could not reach {selected['name']}: {exc}"), 502
+
+
+@app.get("/api/games/<path:filename>/patches")
+def api_game_patches(filename: str):
+    try:
+        safe_rom(filename)
+        game = next((item for item in discover_games()[0] if item["filename"] == filename), None)
+        if game is None:
+            return jsonify(error="Game is not in the current catalogue."), 404
+        return jsonify(filename=filename, patches=game_patch_options(game))
+    except (OSError, ValueError) as exc:
+        return jsonify(error=str(exc)), 400
+
+
+@app.post("/api/games/<path:filename>/patches")
+def api_save_game_patches(filename: str):
+    try:
+        safe_rom(filename)
+        game = next((item for item in discover_games()[0] if item["filename"] == filename), None)
+        if game is None:
+            return jsonify(ok=False, error="Game is not in the current catalogue."), 404
+        body = request.get_json(silent=True) or {}
+        requested = body.get("patches", [])
+        if not isinstance(requested, list) or any(not isinstance(item, str) for item in requested):
+            return jsonify(ok=False, error="Patch selections must be a list of patch IDs."), 400
+        allowed = {patch["id"] for patch in game_patch_options(game)}
+        if len(set(requested)) != len(requested) or not set(requested).issubset(allowed):
+            return jsonify(ok=False, error="One or more selected patches are not available for this game."), 400
+        with PATCH_SETTINGS_LOCK:
+            settings = load_patch_settings()
+            if requested:
+                settings[filename] = sorted(requested)
+            else:
+                settings.pop(filename, None)
+            save_patch_settings(settings)
+        return jsonify(ok=True, message="Game patch settings saved.", patches=game_patch_options(game))
+    except (OSError, ValueError) as exc:
+        return jsonify(ok=False, error=str(exc)), 400
 
 
 @app.post("/api/load")
