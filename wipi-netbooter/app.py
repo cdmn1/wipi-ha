@@ -54,13 +54,48 @@ PATCH_DEFINITIONS = {
         "description": "Allows this Japanese-only game to boot on Japanese, USA and Export NAOMI BIOS regions.",
         "game_ids": {"BCY0"},
     },
-    "illvelo_force_freeplay": {
-        "title": "Force Free Play (community patch)",
-        "description": "Applies the documented Illvelo Free Play patch. The original ROM file is never modified.",
-        "filename_contains": {"illmatic_envelope"},
-        "catalogue_name_contains": {"illvelo", "illmatic envelope"},
-    },
 }
+
+# Documented byte patches from DragonMinded's Naomi netboot patch research.
+# Every patch verifies the original bytes before modifying the upload buffer.
+_DOCUMENTED_GAME_PATCHES = [
+    # key, display name, catalogue aliases, filename aliases, free-play offset, silent-attract offset
+    ("guilty_gear_x", "Guilty Gear X", ("guilty gear x",), ("ggx",), 0x72A28, 0x72ABC),
+    ("ikaruga", "Ikaruga", ("ikaruga",), ("ikaruga",), 0x52626, None),
+    ("illvelo", "Illvelo", ("illvelo", "illmatic envelope"), ("illmatic_envelope",), 0x620C6, 0x6214E),
+    ("karous", "Karous", ("karous",), ("karous",), 0x6135A, 0x613E0),
+    ("marvel_vs_capcom_2", "Marvel vs. Capcom 2", ("marvel vs. capcom 2", "marvel vs capcom 2"), ("mvsc2", "mvsc-2"), 0x1D8138, 0x1D81CC),
+    ("monkey_ball", "Monkey Ball", ("monkey ball",), ("monkeyba", "monkey_ball"), 0x6BE30, 0x6BEC4),
+    ("power_stone_2", "Power Stone 2", ("power stone 2", "powerstone 2"), ("pstone2", "powerstone2"), 0x158F88, 0x15901C),
+    ("puyo_puyo_da", "Puyo Puyo Da!", ("puyo puyo da", "puyopuyo da"), ("puyopuyoda",), 0x44F86, 0x4500C),
+    ("puyo_puyo_fever", "Puyo Puyo Fever", ("puyo puyo fever", "puyopuyo fever"), ("puyofever",), 0x37EAE, 0x37F36),
+    ("quiz_k_qmode", "Quiz K QMode", ("quiz k qmode", "quiz k q-mode"), ("quizkqmode",), 0x29A58, 0x29AEC),
+    ("radirgy", "Radirgy", ("radirgy",), ("radirgy",), 0x6136E, 0x613F4),
+    ("street_fighter_zero_3_upper", "Street Fighter Zero 3 Upper", ("street fighter zero 3 upper", "street fighter zero 3"), ("sfz3", "sfz3upper", "zero3upper"), 0xE8832, 0xE88B8),
+    ("tetris_kiwamemichi", "Tetris Kiwamemichi", ("tetris kiwamemichi", "tetris kiwamemiti"), ("tetris_kiwamemichi", "tetris_kiwamemiti"), 0x7FAB2, 0x7FB38),
+    ("trigger_heart_exelica", "Trigger Heart Exelica", ("trigger heart exelica",), ("triggere", "exelica"), 0x13E522, 0x13E5AA),
+    ("trizeal", "Trizeal", ("trizeal",), ("trizeal",), 0xBE782, 0xBE808),
+    ("under_defeat", "Under Defeat", ("under defeat",), ("underdefeat", "under_defeat"), 0x43FD6, 0x4405C),
+]
+
+for _key, _title, _names, _files, _freeplay, _silent in _DOCUMENTED_GAME_PATCHES:
+    for _suffix, _label, _offset, _expected, _replacement in (
+        ("force_freeplay", "Force Free Play", _freeplay, "42 84", "1A E0"),
+        ("silent_attract", "Silent Attract", _silent, "40 63", "00 E3"),
+    ):
+        if _offset is None:
+            continue
+        PATCH_DEFINITIONS[f"{_key}_{_suffix}"] = {
+            "title": f"{_label} — {_title} (community patch)",
+            "description": f"Applies the documented {_label.lower()} byte patch for {_title}. The original ROM file is never modified.",
+            "filename_contains": set(_files),
+            "catalogue_name_contains": set(_names),
+            "offset": _offset,
+            "expected": _expected,
+            "replacement": _replacement,
+            "target": "naomi",
+        }
+
 CATALOGUE_COLUMNS = [
     "system", "romname", "image", "video", "description", "lcd_description",
     "manufacturer", "year", "genre", "rating", "orientation", "controls",
@@ -251,22 +286,30 @@ def game_patch_options(game: dict[str, Any]) -> list[dict[str, Any]]:
                            "description": definition["description"], "enabled": patch_id in selected})
     return result
 
-def apply_illvelo_force_freeplay(data: bytes) -> bytes:
-    """Apply DragonMinded's documented Illvelo Free Play byte patch."""
-    offset = 0x620C6
-    original = bytes.fromhex("42 84")
-    replacement = bytes.fromhex("1A E0")
+def apply_documented_byte_patch(data: bytes, patch_id: str) -> bytes:
+    """Apply a documented game patch only when its original bytes match."""
+    definition = PATCH_DEFINITIONS.get(patch_id)
+    if not definition or "offset" not in definition:
+        raise ValueError(f"Unknown documented game patch: {patch_id}")
+    offset = int(definition["offset"])
+    original = bytes.fromhex(str(definition["expected"]))
+    replacement = bytes.fromhex(str(definition["replacement"]))
+    title = str(definition["title"])
     if len(data) < offset + len(original):
-        raise ValueError("Illvelo ROM is too small for the documented Free Play patch.")
+        raise ValueError(f"{title}: ROM is too small for the documented patch.")
     actual = data[offset:offset + len(original)]
     if actual != original:
         raise ValueError(
-            "Illvelo Free Play patch was not applied: ROM bytes at 0x620C6 "
+            f"{title} was not applied: ROM bytes at 0x{offset:X} "
             f"are {actual.hex(' ').upper()}, expected {original.hex(' ').upper()}. "
             "This ROM revision may not match the documented patch."
         )
     return data[:offset] + replacement + data[offset + len(replacement):]
 
+
+def apply_illvelo_force_freeplay(data: bytes) -> bytes:
+    """Backward-compatible wrapper for the original Illvelo patch test."""
+    return apply_documented_byte_patch(data, "illvelo_force_freeplay")
 
 def apply_naomi_region_unlock(data: bytes) -> bytes:
     if NaomiRom is None or NaomiRomRegionEnum is None:
@@ -299,10 +342,12 @@ def apply_game_patches(data: bytes, filename: str, cabinet: dict[str, str]) -> t
         if cabinet["target"] != "naomi":
             raise ValueError("The NAOMI region unlock is only supported on NAOMI cabinets.")
         data = apply_naomi_region_unlock(data)
-    if "illvelo_force_freeplay" in selected:
-        if cabinet["target"] != "naomi":
-            raise ValueError("The Illvelo Free Play patch is only supported on NAOMI cabinets.")
-        data = apply_illvelo_force_freeplay(data)
+    for patch_id in sorted(selected):
+        definition = PATCH_DEFINITIONS[patch_id]
+        if definition.get("offset") is not None:
+            if cabinet["target"] != definition.get("target", "naomi"):
+                raise ValueError(f"The {definition['title']} patch is only supported on NAOMI cabinets.")
+            data = apply_documented_byte_patch(data, patch_id)
     return data, sorted(selected)
 
 
