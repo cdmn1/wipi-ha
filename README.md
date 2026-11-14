@@ -15,6 +15,7 @@ The app is developed on the separate wipi-x86-port branch. The default main bran
 - **ROM folder path** (rom_path): defaults to /media/NAOMI. It must be under /media or /share, which Home Assistant maps into the app read-only.
 - **NetDIMM cabinets** (cabinets): add a cabinet entry and fill in its name, IP address, platform, and firmware using the separate fields. Supported platforms: naomi, chihiro, triforce. Supported firmware choices are provided in the Configuration tab.
 - **Disable CRC check** (disable_crc): optional faster boot behavior; disabled by default.
+- **Time Hack** (time_hack): refreshes the NetDIMM 10-minute time limit every 5 seconds; enabled by default.
 
 ## ROM fileset layout
 
@@ -50,6 +51,6 @@ Not yet validated against a physical cabinet:
 - A complete real NetDIMM upload and boot.
 - Performance and compatibility across different NetDIMM firmware versions.
 
-WiPi-specific advanced settings, per-game patches, card emulation, OpenJVS, OpenFFB, and Raspberry Pi hardware integrations are not included in this first x86 port.
+WiPi-specific advanced settings, per-game patches, card emulation, OpenJVS, OpenFFB, and Raspberry Pi hardware integrations are not included in this first x86 port. The original Time Hack loader keepalive is supported and enabled by default; the GPIO relay reboot option remains omitted on x86.
 
 The existing naomi-netboot-ha repository and app remain untouched.
