@@ -28,7 +28,7 @@ jobs:
           p = apply_illvelo_force_freeplay(bytes(b))
           assert p[0x620C6:0x620C8] == bytes.fromhex("1A E0")
           assert p[:0x620C6] == bytes(b[:0x620C6])
-          assert any(x["id"] == "illvelo_force_freeplay" for x in game_patch_options({"filename": "illvelo.bin", "game_id": ""}))
+          assert any(x["id"] == "illvelo_force_freeplay" for x in game_patch_options({"filename": "n1-illmatic_envelope-[841-0059].bin.gz", "name": "Illmatic Envelope", "description": "Illmatic Envelope", "game_id": ""}))
           b[0x620C6:0x620C8] = bytes.fromhex("00 00")
           try:
               apply_illvelo_force_freeplay(bytes(b))
