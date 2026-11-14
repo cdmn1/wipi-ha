@@ -6,6 +6,8 @@ import gzip
 import ipaddress
 import json
 import logging
+import socket
+import struct
 import os
 import threading
 import uuid
@@ -31,6 +33,10 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 app = Flask(__name__)
 JOBS: dict[str, dict[str, Any]] = {}
 JOBS_LOCK = threading.Lock()
+TIME_HACK_LOCK = threading.Lock()
+TIME_HACK_EVENTS: dict[str, threading.Event] = {}
+TIME_HACK_INTERVAL = 5
+TIME_HACK_LIMIT_MS = 10 * 60 * 1000
 CATALOGUE_LOCK = threading.Lock()
 CATALOGUE_COLUMNS = [
     "system", "romname", "image", "video", "description", "lcd_description",
@@ -195,6 +201,35 @@ def enum_value(enum_type: Any, value: str) -> Any:
     raise ValueError(f"Unsupported NetDIMM setting: {value}")
 
 
+def start_time_hack(cabinet: dict[str, str]) -> None:
+    """Keep the original WiPi NetDIMM time limit alive without Pi dependencies."""
+    cabinet_id = cabinet["id"]
+    stop_event = threading.Event()
+    with TIME_HACK_LOCK:
+        previous = TIME_HACK_EVENTS.get(cabinet_id)
+        if previous:
+            previous.set()
+        TIME_HACK_EVENTS[cabinet_id] = stop_event
+
+    def keepalive() -> None:
+        packet = struct.pack("<II", 0x17000004, TIME_HACK_LIMIT_MS)
+        while not stop_event.is_set():
+            try:
+                # WiPi keeps one NetDIMM TCP session open and refreshes every 5s.
+                with socket.create_connection((cabinet["ip"], 10703), timeout=5) as connection:
+                    connection.settimeout(5)
+                    while not stop_event.is_set():
+                        connection.sendall(packet)
+                        if stop_event.wait(TIME_HACK_INTERVAL):
+                            break
+            except OSError as exc:
+                if not stop_event.is_set():
+                    LOG.warning("Time Hack connection to %s failed; retrying: %s", cabinet["ip"], exc)
+                    stop_event.wait(2)
+
+    threading.Thread(target=keepalive, name="time-hack-" + cabinet_id, daemon=True).start()
+    LOG.info("Time Hack enabled for %s (10-minute limit refreshed every 5 seconds)", cabinet["name"])
+
 def perform_load(job_id: str, cabinet: dict[str, str], filename: str) -> None:
     def update(**values: Any) -> None:
         with JOBS_LOCK:
@@ -224,6 +259,8 @@ def perform_load(job_id: str, cabinet: dict[str, str], filename: str) -> None:
                   progress_callback=progress)
         update(status="rebooting", message="Upload complete; rebooting cabinet", progress=100)
         dimm.reboot()
+        if bool(options().get("time_hack", True)):
+            start_time_hack(cabinet)
         update(status="complete", message=f"{cabinet['name']} is being booted", progress=100)
     except Exception as exc:
         LOG.exception("NetDIMM load failed for %s", cabinet.get("name", "cabinet"))
