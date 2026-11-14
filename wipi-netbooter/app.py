@@ -500,7 +500,7 @@ function filterGames(){
   const fav=x.favourite?' ★':'';
   const disabled=x.enabled?'':' · DISABLED';
   const button=x.enabled?'<button data-rom="'+encodeURIComponent(x.filename)+'" '+(cabinets.length?'':'disabled')+'>LOAD GAME</button>':'<button disabled>DISABLED IN CATALOGUE</button>';
-  const profile=(x.game_id==='BCY0'||/^illvelo(?:\\.|$)/i.test(x.filename))?'<button type="button" data-profile="'+encodeURIComponent(x.filename)+'">PATCH PROFILE</button>':'';
+  const profile=(x.game_id==='BCY0'||/^illvelo(?:\.|$)/i.test(x.filename))?'<button type="button" data-profile="'+encodeURIComponent(x.filename)+'">PATCH PROFILE</button>':'';
   return '<article class="card"><div class="art">'+art+'</div>'+video+'<div class="info"><div class="name">'+esc(x.name)+fav+'</div><div class="meta">'+esc(x.system)+' · '+esc(x.year)+' · '+esc(x.genre)+'<br>'+esc(x.orientation)+' · '+esc(x.controls)+disabled+'</div>'+button+profile+'</div></article>';
  }).join('');
  document.querySelectorAll('[data-rom]').forEach(button=>button.addEventListener('click',()=>launchGame(button.dataset.rom)));
