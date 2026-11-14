@@ -23,6 +23,7 @@ options:
   rom_path: /media/NAOMI
   cabinets: []
   disable_crc: false
+  time_hack: true
 schema:
   frontend: "list(modern|classic)"
   rom_path: str
@@ -33,3 +34,4 @@ schema:
       firmware: "list(1.02|2.03|2.06|2.13|2.17|3.01|3.03|3.12|3.17|4.01|4.02)"
       power_entity: str?
   disable_crc: bool
+  time_hack: bool
