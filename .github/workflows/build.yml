@@ -20,11 +20,12 @@ jobs:
         run: |
           python3 -m py_compile wipi-netbooter/app.py
           docker run --rm wipi-ha:test python -c 'from netdimm import NetDimm, NetDimmTargetEnum, NetDimmVersionEnum; print("targets:", [x.value for x in NetDimmTargetEnum]); print("versions:", [x.value for x in NetDimmVersionEnum]); assert hasattr(NetDimm, "send") and hasattr(NetDimm, "reboot")'
+          docker run --rm wipi-ha:test python -c 'from naomi import NaomiRom, NaomiRomRegionEnum; from app import apply_naomi_region_unlock; r=NaomiRom(apply_naomi_region_unlock(NaomiRom.default().data)); assert r.valid and set(r.regions) == {NaomiRomRegionEnum.REGION_JAPAN, NaomiRomRegionEnum.REGION_USA, NaomiRomRegionEnum.REGION_EXPORT}'
       - name: Smoke test web UI and API
         run: |
           mkdir -p test-share/fileset/roms test-share/fileset/csv
           printf 'sample ROM' > test-share/fileset/roms/sample.bin
-          printf 'system,romname,image,video,description,lcd_description,manufacturer,year,genre,rating,orientation,controls,enabled,favourite,openjvs,openffb,game_id,audit_name\n"Sega Naomi",sample.bin,sample.png,,Sample Game,,Test,2000,Action,,Horizontal,Digital,Yes,No,,,,\n' > test-share/fileset/csv/romsinfo.csv
+          printf 'system,romname,image,video,description,lcd_description,manufacturer,year,genre,rating,orientation,controls,enabled,favourite,openjvs,openffb,game_id,audit_name\n"Sega Naomi",sample.bin,sample.png,,Sample Game,,Test,2000,Action,,Horizontal,Digital,Yes,No,, ,BCY0,\n' > test-share/fileset/csv/romsinfo.csv
           printf '{"frontend":"classic","rom_path":"/share/fileset/roms","cabinets":[{"name":"Test cabinet","ip":"127.0.0.1","target":"naomi","firmware":"4.01","power_entity":"switch.arcade"}],"disable_crc":false}' > test-options.json
           docker run -d --name wipi-ha-test -p 8256:8256 \
             -v "$PWD/test-options.json:/data/options.json:ro" \
@@ -55,6 +56,12 @@ jobs:
           grep -q 'setCabinetPower' /tmp/modern.html
           curl -fsS http://127.0.0.1:8256/api/games >/tmp/games.json
           python3 -c 'import json; d=json.load(open("/tmp/games.json")); assert len(d["games"]) == 1 and d["games"][0]["name"] == "Sample Game" and d["games"][0]["genre"] == "Action" and d["systems"] == ["Sega Naomi"]'
+          curl -fsS http://127.0.0.1:8256/api/games/sample.bin/patches >/tmp/patches.json
+          python3 -c 'import json; p=json.load(open("/tmp/patches.json"))["patches"]; assert len(p) == 1 and p[0]["id"] == "naomi_region_unlock" and not p[0]["enabled"]'
+          curl -fsS -X POST http://127.0.0.1:8256/api/games/sample.bin/patches -H 'Content-Type: application/json' -d '{"patches":["naomi_region_unlock"]}' >/tmp/save-patches.json
+          python3 -c 'import json; assert json.load(open("/tmp/save-patches.json"))["ok"]'
+          curl -fsS http://127.0.0.1:8256/api/games/sample.bin/patches >/tmp/patches-saved.json
+          python3 -c 'import json; assert json.load(open("/tmp/patches-saved.json"))["patches"][0]["enabled"]'
           curl -fsS -X POST http://127.0.0.1:8256/api/catalogue -H 'Content-Type: application/json' -d '{"romname":"sample.bin","description":"Edited Sample","system":"Sega Naomi","manufacturer":"Test","year":"2000","genre":"Action","orientation":"Horizontal","controls":"Digital (Stick)","enabled":true,"favourite":true}' >/tmp/catalogue.json
           python3 -c 'import json; d=json.load(open("/tmp/catalogue.json")); assert d["ok"]'
           curl -fsS http://127.0.0.1:8256/api/games >/tmp/updated-games.json
