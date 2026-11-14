@@ -41,7 +41,8 @@ jobs:
         run: |
           mkdir -p test-share/fileset/roms test-share/fileset/csv
           printf 'sample ROM' > test-share/fileset/roms/sample.bin
-          printf 'system,romname,image,video,description,lcd_description,manufacturer,year,genre,rating,orientation,controls,enabled,favourite,openjvs,openffb,game_id,audit_name\n"Sega Naomi",sample.bin,sample.png,,Sample Game,,Test,2000,Action,,Horizontal,Digital,Yes,No,, ,BCY0,\n' > test-share/fileset/csv/romsinfo.csv
+          printf 'synthetic Illvelo ROM' > 'test-share/fileset/roms/n1-illmatic_envelope-[841-0059].bin.gz'
+          printf 'system,romname,image,video,description,lcd_description,manufacturer,year,genre,rating,orientation,controls,enabled,favourite,openjvs,openffb,game_id,audit_name\n"Sega Naomi",sample.bin,sample.png,,Sample Game,,Test,2000,Action,,Horizontal,Digital,Yes,No,, ,BCY0,\n"Sega Naomi",n1-illmatic_envelope-[841-0059].bin.gz,illvelo.png,,Illmatic Envelope,,Sega,2003,Action,,Horizontal,Digital,Yes,No,,,\n' > test-share/fileset/csv/romsinfo.csv
           printf '{"frontend":"classic","rom_path":"/share/fileset/roms","cabinets":[{"name":"Test cabinet","ip":"127.0.0.1","target":"naomi","firmware":"4.01","power_entity":"switch.arcade"}],"disable_crc":false}' > test-options.json
           docker run -d --name wipi-ha-test -p 8256:8256 \
             -v "$PWD/test-options.json:/data/options.json:ro" \
@@ -71,8 +72,10 @@ jobs:
           grep -q 'POWER ON' /tmp/modern.html
           grep -q 'setCabinetPower' /tmp/modern.html
           curl -fsS http://127.0.0.1:8256/api/games >/tmp/games.json
-          python3 -c 'import json; d=json.load(open("/tmp/games.json")); assert len(d["games"]) == 1 and d["games"][0]["name"] == "Sample Game" and d["games"][0]["genre"] == "Action" and d["systems"] == ["Sega Naomi"]'
+          python3 -c 'import json; d=json.load(open("/tmp/games.json")); assert len(d["games"]) == 2 and d["systems"] == ["Sega Naomi"]; sample=next(g for g in d["games"] if g["filename"] == "sample.bin"); assert sample["name"] == "Sample Game" and sample["genre"] == "Action"; ill=next(g for g in d["games"] if g["filename"].startswith("n1-")); assert ill["patchable"] is True'
           curl -fsS http://127.0.0.1:8256/api/games/sample.bin/patches >/tmp/patches.json
+          curl -fsS 'http://127.0.0.1:8256/api/games/n1-illmatic_envelope-%5B841-0059%5D.bin.gz/patches' >/tmp/illvelo-patches.json
+          python3 -c 'import json; p=json.load(open("/tmp/illvelo-patches.json"))["patches"]; assert len(p) == 1 and p[0]["id"] == "illvelo_force_freeplay" and not p[0]["enabled"]'
           python3 -c 'import json; p=json.load(open("/tmp/patches.json"))["patches"]; assert len(p) == 1 and p[0]["id"] == "naomi_region_unlock" and not p[0]["enabled"]'
           curl -fsS -X POST http://127.0.0.1:8256/api/games/sample.bin/patches -H 'Content-Type: application/json' -d '{"patches":["naomi_region_unlock"]}' >/tmp/save-patches.json
           python3 -c 'import json; assert json.load(open("/tmp/save-patches.json"))["ok"]'
