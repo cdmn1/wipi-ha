@@ -51,6 +51,8 @@ Not yet validated against a physical cabinet:
 - A complete real NetDIMM upload and boot.
 - Performance and compatibility across different NetDIMM firmware versions.
 
-WiPi-specific advanced settings, per-game patches, card emulation, OpenJVS, OpenFFB, and Raspberry Pi hardware integrations are not included in this first x86 port. The original Time Hack loader keepalive is supported and enabled by default; the GPIO relay reboot option remains omitted on x86.
+Per-game patch profiles are now supported in Modern and Classic interfaces. The first available option is a per-game NAOMI region unlock for Street Fighter Zero 3 Upper (game ID BCY0). It is applied to the in-memory NetDIMM image immediately before upload; the source ROM is never modified. Patch selections are stored under `/data` and default to off. The GD-ROM CHD patch published for Zero 3 Upper is not copied byte-for-byte: the app uses `naomiutils` to update the equivalent region list in the NetDIMM ROM header. Free Play and other game-specific patches are not yet included; each needs a verified patch definition for the NetDIMM image format.
+
+OpenJVS, OpenFFB, card emulation, and Raspberry Pi hardware integrations remain out of scope. The original Time Hack loader keepalive is supported and enabled by default; the GPIO relay reboot option remains omitted on x86.
 
 The existing naomi-netboot-ha repository and app remain untouched.
