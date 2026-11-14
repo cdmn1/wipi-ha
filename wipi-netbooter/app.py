@@ -57,7 +57,8 @@ PATCH_DEFINITIONS = {
     "illvelo_force_freeplay": {
         "title": "Force Free Play (community patch)",
         "description": "Applies the documented Illvelo Free Play patch. The original ROM file is never modified.",
-        "filename_stems": {"illvelo"},
+        "filename_contains": {"illmatic_envelope"},
+        "catalogue_name_contains": {"illvelo", "illmatic envelope"},
     },
 }
 CATALOGUE_COLUMNS = [
@@ -236,14 +237,19 @@ def game_patch_options(game: dict[str, Any]) -> list[dict[str, Any]]:
     result = []
     for patch_id, definition in PATCH_DEFINITIONS.items():
         game_id_match = game.get("game_id") in definition.get("game_ids", set())
-        filename = Path(game.get("filename", "")).name.lower()
+        filename = Path(game.get("filename", "")).name.casefold()
+        name = " ".join(str(game.get(field, "")) for field in
+                        ("name", "description", "audit_name")).casefold()
+        filename_match = any(token in filename for token in
+                             definition.get("filename_contains", set()))
+        catalogue_match = any(token in name for token in
+                              definition.get("catalogue_name_contains", set()))
         stem_match = any(filename == stem or filename.startswith(stem + ".")
                          for stem in definition.get("filename_stems", set()))
-        if game_id_match or stem_match:
+        if game_id_match or stem_match or filename_match or catalogue_match:
             result.append({"id": patch_id, "title": definition["title"],
                            "description": definition["description"], "enabled": patch_id in selected})
     return result
-
 
 def apply_illvelo_force_freeplay(data: bytes) -> bytes:
     """Apply DragonMinded's documented Illvelo Free Play byte patch."""
@@ -500,7 +506,7 @@ function filterGames(){
   const fav=x.favourite?' ★':'';
   const disabled=x.enabled?'':' · DISABLED';
   const button=x.enabled?'<button data-rom="'+encodeURIComponent(x.filename)+'" '+(cabinets.length?'':'disabled')+'>LOAD GAME</button>':'<button disabled>DISABLED IN CATALOGUE</button>';
-  const profile=(x.game_id==='BCY0'||/^illvelo(?:\.|$)/i.test(x.filename))?'<button type="button" data-profile="'+encodeURIComponent(x.filename)+'">PATCH PROFILE</button>':'';
+  const profile=x.patchable?'<button type="button" data-profile="'+encodeURIComponent(x.filename)+'">PATCH PROFILE</button>':'';
   return '<article class="card"><div class="art">'+art+'</div>'+video+'<div class="info"><div class="name">'+esc(x.name)+fav+'</div><div class="meta">'+esc(x.system)+' · '+esc(x.year)+' · '+esc(x.genre)+'<br>'+esc(x.orientation)+' · '+esc(x.controls)+disabled+'</div>'+button+profile+'</div></article>';
  }).join('');
  document.querySelectorAll('[data-rom]').forEach(button=>button.addEventListener('click',()=>launchGame(button.dataset.rom)));
@@ -599,6 +605,8 @@ def classic_index():
 def api_games():
     try:
         games, error = discover_games()
+        for game in games:
+            game["patchable"] = bool(game_patch_options(game))
         return jsonify(games=games, systems=discover_systems(rom_folder()), error=error, rom_path=str(rom_folder()))
     except (OSError, ValueError) as exc:
         return jsonify(games=[], error=str(exc), rom_path=None)
