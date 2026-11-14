@@ -71,7 +71,7 @@ _DOCUMENTED_GAME_PATCHES = [
     ("puyo_puyo_fever", "Puyo Puyo Fever", ("puyo puyo fever", "puyopuyo fever"), ("puyofever",), 0x37EAE, 0x37F36),
     ("quiz_k_qmode", "Quiz K QMode", ("quiz k qmode", "quiz k q-mode"), ("quizkqmode",), 0x29A58, 0x29AEC),
     ("radirgy", "Radirgy", ("radirgy",), ("radirgy",), 0x6136E, 0x613F4),
-    ("street_fighter_zero_3_upper", "Street Fighter Zero 3 Upper", ("street fighter zero 3 upper", "street fighter zero 3"), ("sfz3", "sfz3upper", "zero3upper"), 0xE8832, 0xE88B8),
+    ("street_fighter_zero_3_upper", "Street Fighter Zero 3 Upper", ("street fighter zero 3 upper",), ("sfz3upper", "zero3upper"), 0xE8832, 0xE88B8),
     ("tetris_kiwamemichi", "Tetris Kiwamemichi", ("tetris kiwamemichi", "tetris kiwamemiti"), ("tetris_kiwamemichi", "tetris_kiwamemiti"), 0x7FAB2, 0x7FB38),
     ("trigger_heart_exelica", "Trigger Heart Exelica", ("trigger heart exelica",), ("triggere", "exelica"), 0x13E522, 0x13E5AA),
     ("trizeal", "Trizeal", ("trizeal",), ("trizeal",), 0xBE782, 0xBE808),
