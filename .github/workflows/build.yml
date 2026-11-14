@@ -22,21 +22,30 @@ jobs:
           docker run --rm wipi-ha:test python -c 'from netdimm import NetDimm, NetDimmTargetEnum, NetDimmVersionEnum; print("targets:", [x.value for x in NetDimmTargetEnum]); print("versions:", [x.value for x in NetDimmVersionEnum]); assert hasattr(NetDimm, "send") and hasattr(NetDimm, "reboot")'
           docker run --rm wipi-ha:test python -c 'from naomi import NaomiRom, NaomiRomRegionEnum; from app import apply_naomi_region_unlock; r=NaomiRom(apply_naomi_region_unlock(NaomiRom.default().data)); assert r.valid and set(r.regions) == {NaomiRomRegionEnum.REGION_JAPAN, NaomiRomRegionEnum.REGION_USA, NaomiRomRegionEnum.REGION_EXPORT}'
           docker run --rm wipi-ha:test python -c '
-          from app import apply_illvelo_force_freeplay, game_patch_options
+          from app import apply_documented_byte_patch, apply_illvelo_force_freeplay, game_patch_options
           b = bytearray(0x620C8)
           b[0x620C6:0x620C8] = bytes.fromhex("42 84")
           p = apply_illvelo_force_freeplay(bytes(b))
           assert p[0x620C6:0x620C8] == bytes.fromhex("1A E0")
           assert p[:0x620C6] == bytes(b[:0x620C6])
-          assert any(x["id"] == "illvelo_force_freeplay" for x in game_patch_options({"filename": "n1-illmatic_envelope-[841-0059].bin.gz", "name": "Illmatic Envelope", "description": "Illmatic Envelope", "game_id": ""}))
+          illvelo = game_patch_options({"filename": "n1-illmatic_envelope-[841-0059].bin.gz", "name": "Illmatic Envelope", "description": "Illmatic Envelope", "game_id": ""})
+          assert {x["id"] for x in illvelo} == {"illvelo_force_freeplay", "illvelo_silent_attract"}
+          monkey = game_patch_options({"filename": "monkeyba.zip.bin", "name": "Monkey Ball", "description": "Monkey Ball", "game_id": ""})
+          assert {x["id"] for x in monkey} == {"monkey_ball_force_freeplay", "monkey_ball_silent_attract"}
+          b = bytearray(0x6BEC6)
+          b[0x6BE30:0x6BE32] = bytes.fromhex("42 84")
+          b[0x6BEC4:0x6BEC6] = bytes.fromhex("40 63")
+          p = apply_documented_byte_patch(bytes(b), "monkey_ball_force_freeplay")
+          p = apply_documented_byte_patch(p, "monkey_ball_silent_attract")
+          assert p[0x6BE30:0x6BE32] == bytes.fromhex("1A E0")
+          assert p[0x6BEC4:0x6BEC6] == bytes.fromhex("00 E3")
           b[0x620C6:0x620C8] = bytes.fromhex("00 00")
           try:
               apply_illvelo_force_freeplay(bytes(b))
           except ValueError:
               pass
           else:
-              raise AssertionError("mismatched ROM bytes were accepted")
-          '
+              raise AssertionError("mismatched ROM bytes were accepted")          '
       - name: Smoke test web UI and API
         run: |
           mkdir -p test-share/fileset/roms test-share/fileset/csv
@@ -75,7 +84,7 @@ jobs:
           python3 -c 'import json; d=json.load(open("/tmp/games.json")); assert len(d["games"]) == 2 and d["systems"] == ["Sega Naomi"]; sample=next(g for g in d["games"] if g["filename"] == "sample.bin"); assert sample["name"] == "Sample Game" and sample["genre"] == "Action"; ill=next(g for g in d["games"] if g["filename"].startswith("n1-")); assert ill["patchable"] is True'
           curl -fsS http://127.0.0.1:8256/api/games/sample.bin/patches >/tmp/patches.json
           curl -fsS 'http://127.0.0.1:8256/api/games/n1-illmatic_envelope-%5B841-0059%5D.bin.gz/patches' >/tmp/illvelo-patches.json
-          python3 -c 'import json; p=json.load(open("/tmp/illvelo-patches.json"))["patches"]; assert len(p) == 1 and p[0]["id"] == "illvelo_force_freeplay" and not p[0]["enabled"]'
+          python3 -c 'import json; p=json.load(open("/tmp/illvelo-patches.json"))["patches"]; assert {x["id"] for x in p} == {"illvelo_force_freeplay", "illvelo_silent_attract"} and not any(x["enabled"] for x in p)'
           python3 -c 'import json; p=json.load(open("/tmp/patches.json"))["patches"]; assert len(p) == 1 and p[0]["id"] == "naomi_region_unlock" and not p[0]["enabled"]'
           curl -fsS -X POST http://127.0.0.1:8256/api/games/sample.bin/patches -H 'Content-Type: application/json' -d '{"patches":["naomi_region_unlock"]}' >/tmp/save-patches.json
           python3 -c 'import json; assert json.load(open("/tmp/save-patches.json"))["ok"]'
