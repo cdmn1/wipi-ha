@@ -627,13 +627,22 @@ def api_cabinet_power(cabinet_id: str):
     action = str(body.get("action", "")).lower()
     if action not in {"on", "off"}:
         return jsonify(ok=False, error="Power action must be on or off."), 400
+    # Power operations must never leave a persistent Time Hack socket attached
+    # to a cabinet that is being switched on or off.
+    load_lock = cabinet_load_lock(selected["id"])
+    if not load_lock.acquire(blocking=False):
+        return jsonify(ok=False, error=f"A NetDIMM operation is already running for {selected['name']}. Please wait and try again."), 409
     try:
+        stop_time_hack(selected)
+        LOG.info("Time Hack halted before powering %s %s", selected["name"], action)
         supervisor_api("POST", f"services/switch/turn_{action}", {"entity_id": entity})
         return jsonify(ok=True, message=f"{selected['name']} power {action} command sent.",
                        state=cabinet_power_state(selected))
     except Exception as exc:
         LOG.warning("Power %s failed for %s: %s", action, selected["name"], exc)
         return jsonify(ok=False, error=str(exc)), 502
+    finally:
+        load_lock.release()
 
 
 @app.post("/api/catalogue")
