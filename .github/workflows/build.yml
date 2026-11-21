@@ -19,6 +19,7 @@ jobs:
       - name: Check Python syntax and NetDIMM package API
         run: |
           python3 -m py_compile wipi-netbooter/app.py
+          docker run --rm wipi-ha:test python -c 'import json; from naomi.settings import SettingsManager, get_default_settings_directory; m=SettingsManager(get_default_settings_directory()); assert "BBG0.settings" in m.files; w=m.from_serial(bytes.fromhex("42424730")); assert w.serial == bytes.fromhex("42424730"); json.dumps(w.to_json()); print("Naomi EEPROM settings API and BBG0 definition verified")'
           docker run --rm wipi-ha:test python -c 'from netdimm import NetDimm, NetDimmTargetEnum, NetDimmVersionEnum; print("targets:", [x.value for x in NetDimmTargetEnum]); print("versions:", [x.value for x in NetDimmVersionEnum]); assert hasattr(NetDimm, "send") and hasattr(NetDimm, "reboot")'
           docker run --rm wipi-ha:test python -c 'from naomi import NaomiRom, NaomiRomRegionEnum; from app import apply_naomi_region_unlock; r=NaomiRom(apply_naomi_region_unlock(NaomiRom.default().data)); assert r.valid and set(r.regions) == {NaomiRomRegionEnum.REGION_JAPAN, NaomiRomRegionEnum.REGION_USA, NaomiRomRegionEnum.REGION_EXPORT}'
           docker run --rm wipi-ha:test python -c '
