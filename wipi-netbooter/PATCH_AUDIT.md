@@ -128,10 +128,14 @@ Source: https://github.com/DragonMinded/netboot
 
 ## Implementation status
 
-- No new binary patch was added in this audit because the upstream Crazy Taxi/Jambo Safari patch files and their exact hunks were not retrievable here. No offsets or replacement bytes have been invented.
+- No new binary patch was added because the upstream Crazy Taxi/Jambo Safari patch files and their exact hunks were not retrievable. No offsets or replacement bytes have been invented.
 - The existing Illvelo Force Free Play implementation is unchanged.
-- No app version bump is warranted for this documentation-only audit.
-- The existing app build on this branch is green: https://github.com/cdmn1/wipi-ha/actions/runs/43653879432
+- WiPi Netbooter 0.4.0 adds a read-only `GET /api/games/<filename>/settings` endpoint. It decompresses the selected ROM if needed, validates the Naomi header, identifies the four-byte serial and declared BIOS regions, and returns the applicable bundled `SettingsManager.from_rom()` settings as JSON. A caller may request a specific region using `?region=REGION_NAME`.
+- This endpoint does not attach an EEPROM, alter Naomi ROM header defaults, write to cabinet NVRAM, or change the ROM sent to the cabinet. It is a discovery/API foundation, not yet a user-facing editor.
+- CI now checks that the bundled `BBG0.settings` definition is available and that `SettingsManager.from_serial()` can serialize its wrapper. The 0.4.0 workflow run is pending at the time of this update.
+- The known SFZ3 Upper region-unlock option remains untouched and must stay disabled; the user's cabinet black-screened with it.
+
+Next implementation step: build a user-facing editor on this read-only discovery API, then add a separate explicit save/apply action using `NaomiSettingsPatcher.put_eeprom()` only after per-game protection requirements and rollback behaviour are handled.
 
 ## Recommended implementation order
 
