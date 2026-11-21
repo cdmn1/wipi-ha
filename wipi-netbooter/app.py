@@ -667,7 +667,7 @@ document.getElementById('save-game-settings').addEventListener('click',async()=>
  }
  const status=document.getElementById('game-settings-status');status.textContent='Saving profile…';
  try{
-  const response=await fetch('/api/games/'+encodeURIComponent(activeSettingsFilename)+'/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({settings:activeSettings})});
+  const response=await fetch('/api/games/'+encodeURIComponent(activeSettingsFilename)+'/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({region:document.getElementById('game-settings-region').value,settings:activeSettings})});
   const result=await response.json();if(!response.ok||!result.ok)throw new Error(result.error||'Could not save settings');
   status.textContent=result.message;
  }catch(error){status.textContent='Error: '+error.message}
