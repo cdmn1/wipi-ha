@@ -20,9 +20,9 @@ except ImportError:
     NaomiRom = NaomiRomRegionEnum = None
 
 try:
-    from naomi.settings import SettingsManager, get_default_settings_directory
+    from naomi.settings import NaomiSettingsManager, get_default_settings_directory
 except ImportError:
-    SettingsManager = get_default_settings_directory = None
+    NaomiSettingsManager = get_default_settings_directory = None
 from pathlib import Path
 from typing import Any
 
@@ -850,7 +850,7 @@ def read_rom_bytes(filename: str) -> bytes:
 @app.get("/api/games/<path:filename>/settings")
 def api_game_settings(filename: str):
     """Return editable EEPROM settings discovered from a game's Naomi ROM serial."""
-    if NaomiRom is None or NaomiRomRegionEnum is None or SettingsManager is None:
+    if NaomiRom is None or NaomiRomRegionEnum is None or NaomiSettingsManager is None:
         return jsonify(error="Naomi settings tools are unavailable in this build."), 503
     try:
         data = read_rom_bytes(filename)
@@ -865,7 +865,7 @@ def api_game_settings(filename: str):
         if region is None:
             return jsonify(error="Requested region is not declared by this ROM.",
                            regions=[item.name for item in regions]), 400
-        manager = SettingsManager(get_default_settings_directory())
+        manager = NaomiSettingsManager(get_default_settings_directory())
         wrapper = manager.from_rom(rom, region)
         settings = wrapper.to_json()
         return jsonify(filename=filename, serial=rom.serial.hex().upper(),
