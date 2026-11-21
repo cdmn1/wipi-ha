@@ -520,6 +520,7 @@ input{flex:1;min-width:220px}button{cursor:pointer;background:#087eb7;border-col
 <div class="muted" id="summary">Loading game list…</div>
 <div id="job" class="job"></div>
 <div class="panel" id="patch-profile" hidden><strong id="patch-profile-title">Game patches</strong><div id="patch-profile-options"></div><button id="save-patch-profile" type="button">SAVE PATCH SETTINGS</button> <button id="close-patch-profile" type="button">CLOSE</button><span id="patch-profile-status" class="muted"></span></div>
+<div class="panel" id="game-settings" hidden><strong id="game-settings-title">NAOMI EEPROM SETTINGS</strong><p class="muted">Edit the default EEPROM profile for this game. Saving stores the profile only; it does not modify your ROM or apply settings to the cabinet yet.</p><div id="game-settings-region-wrap" hidden>Region: <select id="game-settings-region"></select></div><div id="game-settings-fields"></div><button id="save-game-settings" type="button">SAVE SETTINGS PROFILE</button> <button id="close-game-settings" type="button">CLOSE</button><span id="game-settings-status" class="muted"></span></div>
 </section>
 <div class="grid" id="games"></div>
 </main>
@@ -557,10 +558,12 @@ function filterGames(){
   const disabled=x.enabled?'':' · DISABLED';
   const button=x.enabled?'<button data-rom="'+encodeURIComponent(x.filename)+'" '+(cabinets.length?'':'disabled')+'>LOAD GAME</button>':'<button disabled>DISABLED IN CATALOGUE</button>';
   const profile=x.patchable?'<button type="button" data-profile="'+encodeURIComponent(x.filename)+'">PATCH PROFILE</button>':'';
-  return '<article class="card"><div class="art">'+art+'</div>'+video+'<div class="info"><div class="name">'+esc(x.name)+fav+'</div><div class="meta">'+esc(x.system)+' · '+esc(x.year)+' · '+esc(x.genre)+'<br>'+esc(x.orientation)+' · '+esc(x.controls)+disabled+'</div>'+button+profile+'</div></article>';
+  const settings=String(x.system||'').toLowerCase().includes('naomi')?'<button type="button" data-settings="'+encodeURIComponent(x.filename)+'">EEPROM SETTINGS</button>':'';
+  return '<article class="card"><div class="art">'+art+'</div>'+video+'<div class="info"><div class="name">'+esc(x.name)+fav+'</div><div class="meta">'+esc(x.system)+' · '+esc(x.year)+' · '+esc(x.genre)+'<br>'+esc(x.orientation)+' · '+esc(x.controls)+disabled+'</div>'+button+profile+settings+'</div></article>';
  }).join('');
  document.querySelectorAll('[data-rom]').forEach(button=>button.addEventListener('click',()=>launchGame(button.dataset.rom)));
  document.querySelectorAll('[data-profile]').forEach(button=>button.addEventListener('click',()=>openPatchProfile(button.dataset.profile)));
+ document.querySelectorAll('[data-settings]').forEach(button=>button.addEventListener('click',()=>openGameSettings(button.dataset.settings)));
 }
 async function refreshCabinetPower(){
  const cabinet=cabinets.find(c=>c.id===document.getElementById('cabinet').value);
@@ -616,6 +619,60 @@ async function savePatchProfile(){
 }
 document.getElementById('save-patch-profile').addEventListener('click',savePatchProfile);
 document.getElementById('close-patch-profile').addEventListener('click',()=>{document.getElementById('patch-profile').hidden=true});
+let activeSettingsFilename='', activeSettings=null;
+async function openGameSettings(encoded){
+ const filename=decodeURIComponent(encoded),panel=document.getElementById('game-settings');
+ activeSettingsFilename=filename;panel.hidden=false;
+ document.getElementById('game-settings-title').textContent='EEPROM settings: '+filename;
+ document.getElementById('game-settings-fields').textContent='Reading Naomi ROM settings…';
+ document.getElementById('game-settings-status').textContent='';
+ try{
+  const response=await fetch('/api/games/'+encodeURIComponent(filename)+'/settings');
+  const result=await response.json();if(!response.ok)throw new Error(result.error||'Could not read EEPROM settings');
+  activeSettings=result.settings;
+  const region=document.getElementById('game-settings-region'),wrap=document.getElementById('game-settings-region-wrap');
+  region.innerHTML=result.regions.map(r=>'<option value="'+esc(r)+'" '+(r===result.region?'selected':'')+'>'+esc(r)+'</option>').join('');
+  wrap.hidden=result.regions.length<2;
+  renderGameSettings(activeSettings);
+  panel.scrollIntoView({behavior:'smooth',block:'center'});
+ }catch(error){activeSettings=null;document.getElementById('game-settings-fields').textContent=error.message}
+}
+function renderGameSettings(wrapper){
+ const root=document.getElementById('game-settings-fields');
+ const groups=[['System settings',wrapper.system],['Game settings',wrapper.game]];
+ root.innerHTML=groups.map(([title,group])=>{
+  if(!group||!Array.isArray(group.settings)||!group.settings.length)return '';
+  return '<h3>'+title+'</h3>'+group.settings.map((setting,index)=>{
+   const values=setting.values;
+   if(!values||typeof values!=='object'||setting.read_only===true)return '';
+   const options=Object.entries(values).map(([value,label])=>'<option value="'+esc(value)+'" '+(Number(value)===Number(setting.current)?'selected':'')+'>'+esc(label)+'</option>').join('');
+   return '<label style="display:block;margin:12px 0"><strong>'+esc(setting.name||('Setting '+(index+1)))+'</strong><select style="display:block;width:100%;margin-top:5px" data-setting-group="'+title.split(' ')[0].toLowerCase()+'" data-setting-index="'+index+'">'+options+'</select></label>';
+  }).join('');
+ }).join('')||'<p class="muted">No editable EEPROM settings were found for this game.</p>';
+}
+document.getElementById('game-settings-region').addEventListener('change',async()=>{
+ const region=document.getElementById('game-settings-region').value;
+ try{
+  const response=await fetch('/api/games/'+encodeURIComponent(activeSettingsFilename)+'/settings?region='+encodeURIComponent(region));
+  const result=await response.json();if(!response.ok)throw new Error(result.error||'Could not read region settings');
+  activeSettings=result.settings;renderGameSettings(activeSettings);
+ }catch(error){document.getElementById('game-settings-status').textContent='Error: '+error.message}
+});
+document.getElementById('save-game-settings').addEventListener('click',async()=>{
+ if(!activeSettings)return;
+ for(const select of document.querySelectorAll('#game-settings-fields select[data-setting-index]')){
+  const group=select.dataset.settingGroup==='system'?'system':'game';
+  const index=Number(select.dataset.settingIndex);
+  activeSettings[group].settings[index].current=Number(select.value);
+ }
+ const status=document.getElementById('game-settings-status');status.textContent='Saving profile…';
+ try{
+  const response=await fetch('/api/games/'+encodeURIComponent(activeSettingsFilename)+'/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({settings:activeSettings})});
+  const result=await response.json();if(!response.ok||!result.ok)throw new Error(result.error||'Could not save settings');
+  status.textContent=result.message;
+ }catch(error){status.textContent='Error: '+error.message}
+});
+document.getElementById('close-game-settings').addEventListener('click',()=>{document.getElementById('game-settings').hidden=true});
 async function launchGame(encoded){
  const filename=decodeURIComponent(encoded);
  const cabinetId=document.getElementById('cabinet').value;
@@ -870,13 +927,49 @@ def api_game_settings(filename: str):
         settings = wrapper.to_json()
         return jsonify(filename=filename, serial=rom.serial.hex().upper(),
                        region=region.name, regions=[item.name for item in regions],
-                       has_game_settings=bool(settings.get("game", {}).get("settings")),
                        settings=settings)
     except FileNotFoundError:
         return jsonify(error="ROM file is not available."), 404
     except Exception as exc:
         LOG.warning("Could not read Naomi settings for %s: %s", filename, exc)
         return jsonify(error=str(exc)), 422
+
+
+SETTINGS_PROFILES_FILE = Path("/data/naomi_settings_profiles.json")
+SETTINGS_PROFILES_LOCK = threading.Lock()
+
+
+@app.post("/api/games/<path:filename>/settings")
+def api_save_game_settings(filename: str):
+    if NaomiSettingsManager is None:
+        return jsonify(ok=False, error="Naomi settings tools are unavailable in this build."), 503
+    try:
+        safe_rom(filename)
+        body = request.get_json(silent=True) or {}
+        settings = body.get("settings")
+        if not isinstance(settings, dict):
+            return jsonify(ok=False, error="Settings profile must be a JSON object."), 400
+        manager = NaomiSettingsManager(get_default_settings_directory())
+        wrapper = manager.from_json(settings)
+        # Validate that the selected values can be represented as a real Naomi EEPROM.
+        manager.to_eeprom(wrapper)
+        region = str(body.get("region", "")).strip()
+        with SETTINGS_PROFILES_LOCK:
+            try:
+                profiles = json.loads(SETTINGS_PROFILES_FILE.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                profiles = {}
+            profiles[filename] = {"region": region, "settings": settings}
+            SETTINGS_PROFILES_FILE.parent.mkdir(parents=True, exist_ok=True)
+            temporary = SETTINGS_PROFILES_FILE.with_suffix(".tmp")
+            temporary.write_text(json.dumps(profiles, indent=2, sort_keys=True), encoding="utf-8")
+            temporary.replace(SETTINGS_PROFILES_FILE)
+        return jsonify(ok=True, message="EEPROM settings profile saved. It is not applied to the ROM or cabinet yet.")
+    except FileNotFoundError:
+        return jsonify(ok=False, error="ROM file is not available."), 404
+    except Exception as exc:
+        LOG.warning("Could not save Naomi settings for %s: %s", filename, exc)
+        return jsonify(ok=False, error=str(exc)), 422
 
 
 @app.get("/api/games/<path:filename>/patches")
