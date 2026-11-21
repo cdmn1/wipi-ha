@@ -925,6 +925,16 @@ def api_game_settings(filename: str):
         manager = NaomiSettingsManager(get_default_settings_directory())
         wrapper = manager.from_rom(rom, region)
         settings = wrapper.to_json()
+        # Re-open a previously saved profile for this exact ROM and region.
+        profiles_path = Path("/data/naomi_settings_profiles.json")
+        try:
+            with SETTINGS_PROFILES_LOCK:
+                profiles = json.loads(profiles_path.read_text(encoding="utf-8"))
+            saved = profiles.get(filename, {})
+            if saved.get("region") == region.name and isinstance(saved.get("settings"), dict):
+                settings = manager.from_json(saved["settings"]).to_json()
+        except (OSError, json.JSONDecodeError, AttributeError, TypeError, ValueError) as exc:
+            LOG.warning("Ignoring unreadable saved Naomi settings profile for %s: %s", filename, exc)
         return jsonify(filename=filename, serial=rom.serial.hex().upper(),
                        region=region.name, regions=[item.name for item in regions],
                        settings=settings)
