@@ -16,9 +16,13 @@ import urllib.request
 
 try:
     from naomi import NaomiRom, NaomiRomRegionEnum
+except ImportError:
+    NaomiRom = NaomiRomRegionEnum = None
+
+try:
     from naomi.settings import SettingsManager, get_default_settings_directory
 except ImportError:
-    NaomiRom = NaomiRomRegionEnum = SettingsManager = get_default_settings_directory = None
+    SettingsManager = get_default_settings_directory = None
 from pathlib import Path
 from typing import Any
 
