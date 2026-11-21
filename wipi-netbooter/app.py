@@ -16,8 +16,9 @@ import urllib.request
 
 try:
     from naomi import NaomiRom, NaomiRomRegionEnum
+    from naomi.settings import SettingsManager, get_default_settings_directory
 except ImportError:
-    NaomiRom = NaomiRomRegionEnum = None
+    NaomiRom = NaomiRomRegionEnum = SettingsManager = get_default_settings_directory = None
 from pathlib import Path
 from typing import Any
 
@@ -832,6 +833,46 @@ def api_test_cabinet(cabinet_id: str):
     except Exception as exc:
         LOG.warning("NetDIMM connection test failed for %s: %s", selected["name"], exc)
         return jsonify(ok=False, message=f"Could not reach {selected['name']}: {exc}"), 502
+
+
+def read_rom_bytes(filename: str) -> bytes:
+    rom_path = safe_rom(filename)
+    if rom_path.name.lower().endswith(".gz"):
+        with gzip.open(rom_path, "rb") as stream:
+            return stream.read()
+    return rom_path.read_bytes()
+
+
+@app.get("/api/games/<path:filename>/settings")
+def api_game_settings(filename: str):
+    """Return editable EEPROM settings discovered from a game's Naomi ROM serial."""
+    if NaomiRom is None or NaomiRomRegionEnum is None or SettingsManager is None:
+        return jsonify(error="Naomi settings tools are unavailable in this build."), 503
+    try:
+        data = read_rom_bytes(filename)
+        rom = NaomiRom(data)
+        if not rom.valid:
+            return jsonify(error="This file is not a valid Naomi ROM image."), 400
+        regions = list(rom.regions)
+        if not regions:
+            return jsonify(error="The Naomi ROM header does not declare a supported region."), 422
+        requested_region = request.args.get("region", "").strip()
+        region = next((item for item in regions if item.name == requested_region), None) if requested_region else regions[0]
+        if region is None:
+            return jsonify(error="Requested region is not declared by this ROM.",
+                           regions=[item.name for item in regions]), 400
+        manager = SettingsManager(get_default_settings_directory())
+        wrapper = manager.from_rom(rom, region)
+        settings = wrapper.to_json()
+        return jsonify(filename=filename, serial=rom.serial.hex().upper(),
+                       region=region.name, regions=[item.name for item in regions],
+                       has_game_settings=bool(settings.get("game", {}).get("settings")),
+                       settings=settings)
+    except FileNotFoundError:
+        return jsonify(error="ROM file is not available."), 404
+    except Exception as exc:
+        LOG.warning("Could not read Naomi settings for %s: %s", filename, exc)
+        return jsonify(error=str(exc)), 422
 
 
 @app.get("/api/games/<path:filename>/patches")
