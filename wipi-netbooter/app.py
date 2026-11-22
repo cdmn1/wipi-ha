@@ -645,7 +645,18 @@ function renderGameSettings(wrapper){
   return '<h3>'+title+'</h3>'+group.settings.map((setting,index)=>{
    const values=setting.values;
    if(!values||typeof values!=='object'||setting.read_only===true)return '';
-   const options=Object.entries(values).map(([value,label])=>'<option value="'+esc(value)+'" '+(Number(value)===Number(setting.current)?'selected':'')+'>'+esc(label)+'</option>').join('');
+   let entries=Object.entries(values);
+   // Coin/Credit Assignment is a 27-choice scale. Keep the normal editor
+   // focused on standard 1:1 (#1) and Free Play (#27), without changing
+   // the underlying settings object or discarding any EEPROM bytes.
+   if(/coin/i.test(String(setting.name||''))){
+    const numberedOne=entries.filter(([value,label])=>/#\s*0*1\b/i.test(String(label)));
+    const freePlay=entries.filter(([value,label])=>/free\s*play/i.test(String(label))||/#\s*0*27\b/i.test(String(label)));
+    const first=numberedOne.length?numberedOne:[entries[0]].filter(Boolean);
+    const last=freePlay.length?freePlay:(entries.length>=27?[entries[entries.length-1]]:[]);
+    entries=[...new Map([...first,...last].map(entry=>[entry[0],entry])).values()];
+   }
+   const options=entries.map(([value,label])=>'<option value="'+esc(value)+'" '+(Number(value)===Number(setting.current)?'selected':'')+'>'+esc(label)+'</option>').join('');
    return '<label style="display:block;margin:12px 0"><strong>'+esc(setting.name||('Setting '+(index+1)))+'</strong><select style="display:block;width:100%;margin-top:5px" data-setting-group="'+title.split(' ')[0].toLowerCase()+'" data-setting-index="'+index+'">'+options+'</select></label>';
   }).join('');
  }).join('')||'<p class="muted">No editable EEPROM settings were found for this game.</p>';
