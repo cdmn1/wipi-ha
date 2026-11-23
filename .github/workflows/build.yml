@@ -76,10 +76,16 @@ jobs:
           grep -q 'data-power="on"' /tmp/classic.html
           grep -q 'SAVE CATALOG ENTRY' /tmp/classic.html
           grep -q 'romBase=g.filename.replace' /tmp/classic.html
+          grep -q 'waitForClassicNetdimmReady' /tmp/classic.html
+          grep -q 'LAUNCH GAME NOW' /tmp/classic.html
+          grep -q 'remaining=30' /tmp/classic.html
           grep -q '<select id="edit-system"' /tmp/classic.html
           ! grep -q 'LCD description' /tmp/classic.html
           curl -fsS http://127.0.0.1:8256/modern >/tmp/modern.html
           grep -q 'Open Classic interface' /tmp/modern.html
+          grep -q 'waitForNetdimmReady' /tmp/modern.html
+          grep -q 'LAUNCH GAME NOW' /tmp/modern.html
+          grep -q 'remaining=30' /tmp/modern.html
           grep -q 'POWER ON' /tmp/modern.html
           grep -q 'setCabinetPower' /tmp/modern.html
           curl -fsS http://127.0.0.1:8256/api/games >/tmp/games.json
