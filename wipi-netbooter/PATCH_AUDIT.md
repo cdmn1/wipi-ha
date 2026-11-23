@@ -1,9 +1,9 @@
 # Naomi patch and header-settings audit
 
-**Updated:** 2026-11-23  
+**Updated:** 2026-11-23 (second-pass source and safety review)  
 **Repository:** cdmn1/wipi-ha, branch wipi-x86-port  
 **Scope:** wipi-netbooter/  
-**App version in this change:** 0.4.3
+**App version in this change:** 0.4.4
 
 This audit distinguishes upstream patch definitions from verified hardware behavior. The added patches are optional and remain disabled until a user selects them. No physical cabinet test is claimed.
 
@@ -40,6 +40,35 @@ Crazy Taxi and Jambo Safari use upstream multi-hunk BinaryDiff files, which also
 
 BAC0 (Crazy Taxi) and BAU0 (Jambo Safari) are the four-byte ROM header game IDs in these patch guards. They are not the Naomi EEPROM serial exposed by NaomiRom.serial.
 
+
+## Complete baseline direct-byte patch inventory
+
+The following entries are the per-title offsets published by DragonMinded in the original Naomi patch discussion. For every listed byte patch, the preimage is 42 84 and the replacement is 1A E0 for Force Free Play, or the preimage is 40 63 and the replacement is 00 E3 for Silent Attract.
+
+| Game | Force Free Play offset | Silent Attract offset | Source identification / revision confidence |
+|---|---:|---:|---|
+| Capcom vs. SNK: Millennium Fight 2000 | 0xFF358 | 0xFF3EC | Exact image size is enforced by this app (125,829,120 bytes); source gives no dump hash/revision |
+| Capcom vs. SNK 2: Mark of the Millennium 2001 | 0x116E58 | 0x116EEC | Exact image size is enforced (159,383,552 bytes); source gives no dump hash/revision |
+| Capcom vs. SNK 2: Millionaire Fighting 2001 | 0x1161F8 | 0x11628C | Exact image size is enforced (159,383,552 bytes); source gives no dump hash/revision |
+| Guilty Gear X | 0x72A28 | 0x72ABC | Title/filename aliases plus two-byte preimage only; no source hash/revision |
+| Ikaruga | 0x52626 | Not offered | Title/filename aliases plus two-byte preimage; game already disables advertise sound in its original binary |
+| Illvelo | 0x620C6 | 0x6214E | Title/filename aliases plus two-byte preimage only; existing user-confirmed Force Free Play patch is unchanged |
+| Karous | 0x6135A | 0x613E0 | Title/filename aliases plus two-byte preimage only; no source hash/revision |
+| Marvel vs. Capcom 2 | 0x1D8138 | 0x1D81CC | Title/filename aliases plus two-byte preimage only; no source hash/revision for these two system patches |
+| Monkey Ball | 0x6BE30 | 0x6BEC4 | Title/filename aliases plus two-byte preimage only; no source hash/revision |
+| Power Stone 2 | 0x158F88 | 0x15901C | Title/filename aliases plus two-byte preimage only; no source hash/revision |
+| Puyo Puyo Da! | 0x44F86 | 0x4500C | Title/filename aliases plus two-byte preimage only; no source hash/revision |
+| Puyo Puyo Fever | 0x37EAE | 0x37F36 | Title/filename aliases plus two-byte preimage only; no source hash/revision |
+| Quiz K QMode | 0x29A58 | 0x29AEC | Title/filename aliases plus two-byte preimage only; no source hash/revision |
+| Radirgy | 0x6136E | 0x613F4 | Title/filename aliases plus two-byte preimage only; no source hash/revision |
+| Street Fighter Zero 3 Upper | 0xE8832 | 0xE88B8 | Only these two independent system patches remain; the known-bad region-unlock patch is removed |
+| Tetris Kiwamemichi | 0x7FAB2 | 0x7FB38 | Title/filename aliases plus two-byte preimage only; no source hash/revision |
+| Trigger Heart Exelica | 0x13E522 | 0x13E5AA | Title/filename aliases plus two-byte preimage only; no source hash/revision |
+| Trizeal | 0xBE782 | 0xBE808 | Title/filename aliases plus two-byte preimage only; no source hash/revision |
+| Under Defeat | 0x43FD6 | 0x4405C | Title/filename aliases plus two-byte preimage only; no source hash/revision |
+
+**Important revision limitation:** the 2019 source thread gives these offsets and byte pairs, but does not publish a SHA-1/CRC or a complete dump revision identifier for each title. The app therefore uses the game title/filename aliases and exact two-byte preimage; it does not claim these guards distinguish every regional/revision variant. The three Capcom/CvS entries additionally have exact image-size checks. A successful preimage check is not a substitute for a full ROM hash or a cabinet test. This is medium confidence for the documented offsets and lower confidence for unlisted ROM revisions.
+
 ## Additional game-specific unlock patches
 
 | Game / patch | ROM identification | Exact byte changes | Purpose | Confidence |
@@ -65,12 +94,27 @@ DragonMinded's header-settings discussion documents per-region defaults in the R
 - USA: 0x1F0
 - Export: 0x200
 
-The first four bytes in the documented examples are:
+Each region has a 16-byte defaults record. The first three documented record offsets are Japan 0x1E0, USA 0x1F0 and Export 0x200. The first four bytes in the examples are:
 
-- 01 02 00 1B for a normal horizontal game.
-- 01 03 00 1B for a vertical game.
+- 01 02 00 1B: apply defaults, horizontal orientation with advertise sound disabled, common coin chute, Free Play.
+- 01 03 00 1B: apply defaults, vertical orientation with advertise sound disabled, common coin chute, Free Play.
 
-The first byte enables header-provided system defaults; the second contains the vertical-orientation and disable-advertise-sound flags; the third selects common vs. individual coin chute behavior; the fourth selects the BIOS coin/credit assignment (27 is Free Play). The post mentions manual coin/credit and bonus settings in later bytes, but this audit does not promote undocumented bitfields into editable controls.
+The documented first eight bytes of each 16-byte record are:
+
+| Record byte | Meaning |
+|---:|---|
+| +0 | 1 enables applying the following system defaults |
+| +1 | Bit 0 = vertical display; bit 1 = disable advertise sound |
+| +2 | Coin chute type: 0 common, 1 individual |
+| +3 | BIOS coin/credit preset number: 1–28; 27 = Free Play, 28 = manual |
+| +4 | Coin 1 rate |
+| +5 | Coin 2 rate |
+| +6 | Credit rate |
+| +7 | Bonus setting |
+
+The last four fields are the documented manual coin/credit/bonus controls; they are not yet exposed by this app. The user's requested editor restriction remains coin-assignment #1 and #27 only; do not expose the other preset choices in the normal UI.
+
+The NaomiRom.defaults API is the supported high-level way to read/write these per-region records. Do not hard-code raw offsets into arbitrary ROMs. The library API also exposes separate ROM-header compatibility/metadata fields: regions, players (1–4), frequencies (15/31 Hz), orientations (horizontal/vertical), servicetype (individual/common service button), names (per-region title strings), sequencetexts (coin-insertion messages), publisher, date, serial, and executable sections. These are not all user settings: players, frequencies, orientations and regions are BIOS compatibility constraints, while names/sequence texts are metadata. No generic region-unlock feature is enabled or proposed.
 
 The supported library API is safer than writing offsets: NaomiRom.defaults reads/writes per-region NaomiEEPROMDefaults objects. NaomiRom also exposes players (allowed player counts 1–4), frequencies (15/31), orientations (horizontal/vertical), servicetype (individual/common service button), regions, names, sequencetexts, serial and date. The app does not yet expose a header editor.
 
@@ -82,12 +126,15 @@ The bundled naomiutils settings API identifies game definitions by the four-byte
 
 The current WiPi EEPROM editor still saves profiles to /data/naomi_settings_profiles.json only. It does not yet attach the generated EEPROM to the ROM sent to the cabinet. The new protection-bypass patches therefore do not apply a saved profile by themselves.
 
+**Protection-patch usability note:** the Crazy Taxi and Jambo Safari noprotect entries only bypass the game's header-change detection. They do not attach an EEPROM, change a header default, or make a saved profile take effect. Since this app currently stores EEPROM profiles without injecting them into the outgoing ROM, selecting either protection patch alone has no settings benefit. Treat these as prerequisites for a future EEPROM/header-application path, not as standalone gameplay patches.
+
 Ikaruga stores game settings in 32 KiB SRAM rather than EEPROM. NaomiSettingsPatcher.put_sram() is documented, but attaching SRAM can overwrite existing high scores. No SRAM integration is added here.
 
 ## Safety and validation
 
 - Every new upstream patch file retains its upstream file-size comment and expected-byte hunks.
 - BinaryDiff.can_patch() is mandatory before BinaryDiff.patch(); wrong size or any mismatching preimage causes a safe failure before the transfer buffer is modified.
+- Catalogue BinaryDiff hunks must specify every expected byte explicitly; wildcard (*) preconditions are rejected. Tests inspect every bundled upstream patch file for complete before/after byte sequences.
 - MVC2 unlock also requires ROM serial BBG0. The two CvS2 unlock files have no serial guard upstream; the app restricts them by distinct title/filename aliases and all 16 byte preimages.
 - New patch selections are never enabled automatically.
 - The SFZ3 Upper region-unlock patch is removed from the selectable catalogue and ROM-load path. A stale saved selection is filtered out so the game can still load without the patch. The separate SFZ3 Upper Free Play/Silent Attract definitions remain distinct.
