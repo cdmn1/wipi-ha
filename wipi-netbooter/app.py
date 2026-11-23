@@ -856,13 +856,48 @@ document.getElementById('save-game-settings').addEventListener('click',async()=>
  }catch(error){status.textContent='Error: '+error.message}
 });
 document.getElementById('close-game-settings').addEventListener('click',()=>{document.getElementById('game-settings').hidden=true});
+async function submitGameLoad(filename,cabinetId){
+ const response=await fetch('/api/load',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({filename:filename,cabinet_id:cabinetId})});
+ const result=await response.json();
+ if(response.status===409&&result.power_required)return {powerRequired:true,result};
+ if(!response.ok)throw new Error(result.error||'Could not start game load');
+ return {result};
+}
+async function powerOnAndWait(cabinetId,cabinetName,status){
+ status.textContent=cabinetName+' is off. Sending power-on command…';
+ const power=await fetch('/api/cabinets/'+encodeURIComponent(cabinetId)+'/power',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'on'})});
+ const powered=await power.json();
+ if(!power.ok||!powered.ok)throw new Error(powered.error||'Could not power on cabinet');
+ for(let attempt=0;attempt<60;attempt++){
+  await new Promise(resolve=>setTimeout(resolve,1000));
+  const response=await fetch('/api/cabinets');
+  const data=await response.json();
+  const cabinet=(data.cabinets||[]).find(item=>item.id===cabinetId);
+  if(cabinet&&cabinet.power_state==='on')return;
+  if(cabinet&&cabinet.power_state==='unavailable')throw new Error('Could not read the cabinet outlet state from Home Assistant');
+  status.textContent='Waiting for '+cabinetName+' to power on… ('+(attempt+1)+'s)';
+ }
+ throw new Error('Cabinet did not report power ON within 60 seconds. Game was not loaded.');
+}
 async function launchGame(encoded){
  const filename=decodeURIComponent(encoded);
  const cabinetId=document.getElementById('cabinet').value;
- if(!cabinetId){document.getElementById('job').textContent='Choose a cabinet first.';return}
- const r=await fetch('/api/load',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({filename:filename,cabinet_id:cabinetId})});
- const result=await r.json();document.getElementById('job').textContent=result.message||result.error||'Request submitted';
- if(result.job_id) watchJob(result.job_id);
+ const status=document.getElementById('job');
+ if(!cabinetId){status.textContent='Choose a cabinet first.';return}
+ status.className='job';status.textContent='Checking cabinet power…';
+ try{
+  let attempt=await submitGameLoad(filename,cabinetId);
+  if(attempt.powerRequired){
+   const name=attempt.result.cabinet_name||'The selected cabinet';
+   if(!confirm(name+' is powered off. Turn it on and launch this game?')){status.textContent='Launch cancelled. Cabinet remains off.';return}
+   await powerOnAndWait(cabinetId,name,status);
+   attempt=await submitGameLoad(filename,cabinetId);
+   if(attempt.powerRequired)throw new Error('Cabinet still reports power OFF. Game was not loaded.');
+  }
+  const result=attempt.result;
+  status.textContent=result.message||'Request submitted';
+  if(result.job_id)watchJob(result.job_id);
+ }catch(error){status.className='job bad';status.textContent='Launch failed: '+error.message}
 }
 async function watchJob(id){
  const panel=document.getElementById('job');
@@ -1215,6 +1250,13 @@ def api_load():
     selected = next((c for c in cabinets() if c["id"] == cabinet_id), None)
     if selected is None:
         return jsonify(error="Select a configured cabinet."), 400
+    # Do not attempt a NetDIMM upload while the configured cabinet outlet is off.
+    # The UI can offer to power it on, then retry this same request.
+    power_state = cabinet_power_state(selected) if selected.get("power_entity") else ""
+    if power_state == "off":
+        return jsonify(error=f"{selected['name']} is powered off.",
+                       power_required=True, power_state=power_state,
+                       cabinet_name=selected["name"]), 409
     job_id = uuid.uuid4().hex
     with JOBS_LOCK:
         JOBS[job_id] = {"status": "queued", "message": "Waiting to start", "progress": 0}
