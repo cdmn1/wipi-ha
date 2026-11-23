@@ -444,7 +444,10 @@ def binary_patch_preconditions_match(data: bytes, patch_lines: list[str]) -> boo
             return False
         for index, token in enumerate(before):
             if token == "*":
-                continue
+                raise ValueError(
+                    f"Wildcard precondition on BinaryDiff line {line_number} is not allowed; "
+                    "every catalogue patch byte must be explicitly verified."
+                )
             try:
                 expected = int(token, 16)
             except ValueError as exc:
