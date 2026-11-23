@@ -136,6 +136,61 @@ class NaomiPatchTests(unittest.TestCase):
                     (b"ROM", []),
                 )
 
+    def test_catalogued_upstream_patches_have_complete_expected_bytes(self):
+        patch_ids = [
+            patch_id for patch_id, definition in app.PATCH_DEFINITIONS.items()
+            if definition.get("patch_file")
+        ]
+        self.assertTrue(patch_ids)
+        for patch_id in patch_ids:
+            definition = app.PATCH_DEFINITIONS[patch_id]
+            patch_path = app.PATCHES_DIR / definition["patch_file"]
+            lines = patch_path.read_text(encoding="utf-8").splitlines()
+            self.assertIsNotNone(app.BinaryDiff.size(lines), patch_id)
+            hunks = [line.strip() for line in lines
+                     if line.strip() and not line.strip().startswith("#")]
+            self.assertTrue(hunks, patch_id)
+            for line in hunks:
+                with self.subTest(patch=patch_id, hunk=line):
+                    offset_text, changes = line.split(":", 1)
+                    before_text, after_text = changes.split("->", 1)
+                    before = before_text.strip().split()
+                    after = after_text.strip().split()
+                    self.assertGreaterEqual(int(offset_text.strip(), 16), 0)
+                    self.assertEqual(len(before), len(after))
+                    self.assertTrue(before)
+                    self.assertTrue(all(len(token) == 2 and
+                                        all(char in "0123456789abcdefABCDEF" for char in token)
+                                        for token in before),
+                                    "Every source byte must be explicit; wildcards are forbidden")
+                    self.assertTrue(all(len(token) == 2 and
+                                        all(char in "0123456789abcdefABCDEF" for char in token)
+                                        for token in after))
+
+    def test_binary_diff_preconditions_reject_wildcards(self):
+        patch_lines = ["# File size: 4", "1: 11 * -> 22 33"]
+        with self.assertRaisesRegex(ValueError, "Wildcard precondition"):
+            app.binary_patch_preconditions_match(bytes.fromhex("00 11 22 00"), patch_lines)
+
+    def test_multi_hunk_binary_patch_fails_if_any_preimage_mismatches(self):
+        with tempfile.TemporaryDirectory() as directory:
+            patch_file = Path(directory) / "multi.binpatch"
+            patch_file.write_text(
+                "# Description: atomic multi-hunk test\n"
+                "# File size: 8\n"
+                "2: 11 22 -> AA BB\n"
+                "6: 33 -> CC\n",
+                encoding="utf-8",
+            )
+            definition = {"title": "Multi-hunk test", "patch_file": "multi.binpatch"}
+            original = bytes.fromhex("00 00 11 22 00 00 34 00")
+            with patch.object(app, "PATCHES_DIR", Path(directory)):
+                with patch.dict(app.PATCH_DEFINITIONS, {"multi_test_patch": definition}):
+                    with self.assertRaisesRegex(ValueError, "preconditions"):
+                        app.apply_binary_patch(original, "multi_test_patch")
+            self.assertEqual(original, bytes.fromhex("00 00 11 22 00 00 34 00"))
+
+
 
 if __name__ == "__main__":
     unittest.main()
