@@ -2,6 +2,14 @@
 
 Notable changes to WiPi Netbooter are documented here. Newest releases appear first.
 
+## 0.4.5
+
+- Added a pre-launch cabinet power check. If a configured cabinet outlet is OFF, both interfaces offer to power it on before loading a game.
+- When accepted, the add-on sends the existing Home Assistant switch power-on command, waits for the outlet to report ON, and only then starts the NetDIMM upload. If power-on fails or the outlet does not come on within 60 seconds, the game is not loaded.
+- Cabinets without a configured power entity retain the existing launch workflow.
+
+**Testing note:** CI validates the add-on build and automated checks; verify the power-on prompt and outlet timing with the actual cabinet and smart outlet after updating.
+
 ## 0.4.4
 
 - Expanded the Naomi patch catalogue with guarded Free Play, Silent Attract, and character-unlock patches for supported titles, including Crazy Taxi, Jambo Safari, Capcom vs. SNK, Capcom vs. SNK 2, and Marvel vs. Capcom 2.
