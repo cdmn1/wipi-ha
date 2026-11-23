@@ -88,18 +88,14 @@ The CvS2 variants have the same declared image size. Their options are matched u
 
 ## Supported Naomi header/configuration settings
 
-DragonMinded's header-settings discussion documents per-region defaults in the ROM header at:
+DragonMinded's header-settings discussion documents 16-byte per-region system-default records. The first three named record offsets are Japan 0x1E0, USA 0x1F0 and Export 0x200.
 
-- Japan: 0x1E0
-- USA: 0x1F0
-- Export: 0x200
-
-Each region has a 16-byte defaults record. The first three documented record offsets are Japan 0x1E0, USA 0x1F0 and Export 0x200. The first four bytes in the examples are:
+The first four bytes in the documented examples are:
 
 - 01 02 00 1B: apply defaults, horizontal orientation with advertise sound disabled, common coin chute, Free Play.
 - 01 03 00 1B: apply defaults, vertical orientation with advertise sound disabled, common coin chute, Free Play.
 
-The documented first eight bytes of each 16-byte record are:
+The documented first eight bytes of each record are:
 
 | Record byte | Meaning |
 |---:|---|
@@ -112,11 +108,15 @@ The documented first eight bytes of each 16-byte record are:
 | +6 | Credit rate |
 | +7 | Bonus setting |
 
-The last four fields are the documented manual coin/credit/bonus controls; they are not yet exposed by this app. The user's requested editor restriction remains coin-assignment #1 and #27 only; do not expose the other preset choices in the normal UI.
+The last four fields are the documented manual coin/credit/bonus controls; they are not yet exposed by this app. The normal editor remains restricted to coin-assignment #1 and #27, as requested.
 
-The NaomiRom.defaults API is the supported high-level way to read/write these per-region records. Do not hard-code raw offsets into arbitrary ROMs. The library API also exposes separate ROM-header compatibility/metadata fields: regions, players (1–4), frequencies (15/31 Hz), orientations (horizontal/vertical), servicetype (individual/common service button), names (per-region title strings), sequencetexts (coin-insertion messages), publisher, date, serial, and executable sections. These are not all user settings: players, frequencies, orientations and regions are BIOS compatibility constraints, while names/sequence texts are metadata. No generic region-unlock feature is enabled or proposed.
+Use the NaomiRom.defaults API to read/write per-region records rather than hard-coding raw offsets. The library also exposes these separate ROM-header fields:
 
-The supported library API is safer than writing offsets: NaomiRom.defaults reads/writes per-region NaomiEEPROMDefaults objects. NaomiRom also exposes players (allowed player counts 1–4), frequencies (15/31), orientations (horizontal/vertical), servicetype (individual/common service button), regions, names, sequencetexts, serial and date. The app does not yet expose a header editor.
+- Compatibility constraints checked by the BIOS: regions, allowed player configurations (1–4), allowed monitor frequencies (15/31 Hz), allowed orientations (horizontal/vertical), and expected service-button type (individual/common).
+- Metadata: per-region game names, coin-insertion sequence texts, publisher, build date and four-byte serial.
+- Executable sections: main executable and test-mode executable.
+
+These are not interchangeable with EEPROM game settings. No generic region-unlock feature is enabled or proposed. The app does not yet expose a general ROM-header editor.
 
 **Important exception:** DragonMinded reports that Crazy Taxi freezes at the SEGA logo if its Free Play / Silent Attract header flags are changed. Use the direct Crazy Taxi game-code patches above instead. The Crazy Taxi/Jambo Safari protection bypasses are prerequisites for EEPROM/header injection, not EEPROM injection themselves.
 
