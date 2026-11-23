@@ -671,6 +671,9 @@ input{flex:1;min-width:220px}button{cursor:pointer;background:#087eb7;border-col
 .art img{width:100%;height:100%;object-fit:contain}.preview{display:block;width:100%;max-height:180px;background:#000}.info{padding:13px}.name{font-weight:bold;font-size:16px}.meta{color:#a9bdc9;font-size:12px;margin:6px 0 12px}
 .card button{width:100%;padding:9px}.panel{background:#1b2a35;border:1px solid #344b5a;border-radius:10px;padding:16px;margin:0 0 18px}
 .muted{color:#a9bdc9}.good{color:#8bd5a5}.bad{color:#ffaaa2}.job{margin-top:12px;line-height:1.5}
+.launch-overlay{position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.78);display:flex;align-items:center;justify-content:center;padding:20px}
+.launch-overlay[hidden]{display:none}.launch-dialog{width:min(100%,440px);background:#1b2a35;border:1px solid #168ac4;border-radius:12px;padding:24px;text-align:center;box-shadow:0 18px 60px #0009}
+.launch-dialog h2{margin:0 0 12px}.launch-dialog p{line-height:1.5;color:#c2d5df}.launch-dialog button{width:100%;margin-top:12px;padding:14px}
 @media(max-width:520px){.top{padding:18px}h1{font-size:21px}}
 </style></head><body>
 <header class="top"><h1>WiPi NETBOOTER</h1><div class="tag">SEGA NAOMI · NETDIMM MANAGER</div><div style="margin-top:10px"><a href="/classic" style="color:#91cce9">Open Classic interface</a></div></header>
@@ -696,6 +699,9 @@ input{flex:1;min-width:220px}button{cursor:pointer;background:#087eb7;border-col
 </section>
 <div class="grid" id="games"></div>
 </main>
+<div id="launch-countdown" class="launch-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="launch-countdown-title">
+ <div class="launch-dialog"><h2 id="launch-countdown-title">Cabinet powered on</h2><p id="launch-countdown-message"></p><button id="launch-now-button" type="button">LAUNCH GAME NOW</button></div>
+</div>
 <script>
 let games=[], cabinets=[];
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -879,6 +885,16 @@ async function powerOnAndWait(cabinetId,cabinetName,status){
  }
  throw new Error('Cabinet did not report power ON within 60 seconds. Game was not loaded.');
 }
+function waitForNetdimmReady(cabinetName){
+ const overlay=document.getElementById('launch-countdown'),message=document.getElementById('launch-countdown-message'),button=document.getElementById('launch-now-button');
+ return new Promise(resolve=>{
+  let remaining=30,interval;
+  const update=()=>{message.textContent=cabinetName+' is powered on. NetDIMM will launch automatically in '+remaining+' seconds. Press below to launch immediately.'};
+  const finish=()=>{clearInterval(interval);button.removeEventListener('click',finish);overlay.hidden=true;resolve()};
+  button.addEventListener('click',finish,{once:true});overlay.hidden=false;update();
+  interval=setInterval(()=>{remaining-=1;if(remaining<=0)finish();else update()},1000);
+ });
+}
 async function launchGame(encoded){
  const filename=decodeURIComponent(encoded);
  const cabinetId=document.getElementById('cabinet').value;
@@ -891,6 +907,7 @@ async function launchGame(encoded){
    const name=attempt.result.cabinet_name||'The selected cabinet';
    if(!confirm(name+' is powered off. Turn it on and launch this game?')){status.textContent='Launch cancelled. Cabinet remains off.';return}
    await powerOnAndWait(cabinetId,name,status);
+   await waitForNetdimmReady(name);
    attempt=await submitGameLoad(filename,cabinetId);
    if(attempt.powerRequired)throw new Error('Cabinet still reports power OFF. Game was not loaded.');
   }
