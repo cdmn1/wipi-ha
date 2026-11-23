@@ -186,12 +186,46 @@ async function saveClassicPatchProfile(filename){
   status.textContent=result.message;
  }catch(error){status.textContent='Error: '+error.message}
 }
+async function submitClassicLoad(filename,cabinetId){
+ const response=await fetch('/api/load',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({filename,cabinet_id:cabinetId})});
+ const result=await response.json();
+ if(response.status===409&&result.power_required)return {powerRequired:true,result};
+ if(!response.ok)throw new Error(result.error||'Could not start game load');
+ return {result};
+}
+async function powerOnClassicAndWait(cabinetId,cabinetName,status){
+ status.textContent=cabinetName+' is off. Sending power-on command…';
+ const power=await fetch('/api/cabinets/'+encodeURIComponent(cabinetId)+'/power',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'on'})});
+ const powered=await power.json();
+ if(!power.ok||!powered.ok)throw new Error(powered.error||'Could not power on cabinet');
+ for(let attempt=0;attempt<60;attempt++){
+  await new Promise(resolve=>setTimeout(resolve,1000));
+  const response=await fetch('/api/cabinets');
+  const data=await response.json();
+  const cabinet=(data.cabinets||[]).find(item=>item.id===cabinetId);
+  if(cabinet&&cabinet.power_state==='on')return;
+  if(cabinet&&cabinet.power_state==='unavailable')throw new Error('Could not read the cabinet outlet state from Home Assistant');
+  status.textContent='Waiting for '+cabinetName+' to power on… ('+(attempt+1)+'s)';
+ }
+ throw new Error('Cabinet did not report power ON within 60 seconds. Game was not loaded.');
+}
 async function launch(filename){
- const cabinetId=el('detail-cabinet').value;if(!cabinetId){el('load-status').textContent='Choose a cabinet first.';return}
- el('load-status').textContent='Sending ROM…';
- const r=await fetch('/api/load',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({filename,cabinet_id:cabinetId})});
- const d=await r.json();el('load-status').textContent=d.message||d.error||'Request submitted';
- if(d.job_id)watch(d.job_id);
+ const cabinetId=el('detail-cabinet').value,status=el('load-status');
+ if(!cabinetId){status.textContent='Choose a cabinet first.';return}
+ status.textContent='Checking cabinet power…';
+ try{
+  let attempt=await submitClassicLoad(filename,cabinetId);
+  if(attempt.powerRequired){
+   const name=attempt.result.cabinet_name||'The selected cabinet';
+   if(!confirm(name+' is powered off. Turn it on and launch this game?')){status.textContent='Launch cancelled. Cabinet remains off.';return}
+   await powerOnClassicAndWait(cabinetId,name,status);
+   attempt=await submitClassicLoad(filename,cabinetId);
+   if(attempt.powerRequired)throw new Error('Cabinet still reports power OFF. Game was not loaded.');
+  }
+  const result=attempt.result;
+  status.textContent=result.message||'Request submitted';
+  if(result.job_id)watch(result.job_id);
+ }catch(error){status.textContent='Launch failed: '+error.message}
 }
 async function watch(id){for(let i=0;i<360;i++){await new Promise(r=>setTimeout(r,1000));const d=await(await fetch('/api/jobs/'+id)).json();el('load-status').textContent=d.status+': '+(d.message||'')+' '+(d.progress??0)+'%';if(['complete','error'].includes(d.status))return}}
 init().catch(e=>el('count').textContent='Could not load catalogue: '+e);
