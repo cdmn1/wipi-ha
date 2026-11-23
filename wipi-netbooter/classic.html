@@ -34,6 +34,9 @@ td:first-child{color:#83b9d5;width:34%}
 video{display:block;width:100%;max-width:100%;max-height:220px;background:#000}
 #detail{min-width:0;max-width:100%;overflow:hidden}
 .launch{margin-top:12px;max-width:100%;white-space:normal}.muted{color:#9cb7c7}.hidden{display:none}
+.launch-overlay{position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.8);display:flex;align-items:center;justify-content:center;padding:20px}
+.launch-overlay[hidden]{display:none}.launch-dialog{width:min(100%,440px);background:#102536;border:1px solid #168ac4;padding:24px;text-align:center;box-shadow:0 18px 60px #0009}
+.launch-dialog p{line-height:1.5;color:#b9d0df}.launch-dialog button{width:100%;padding:14px;margin-top:12px}
 @media(max-width:620px){
  .detailrow{grid-template-columns:minmax(0,1fr);gap:14px}
  .detailrow h2{font-size:22px;line-height:1.25}
@@ -80,6 +83,9 @@ video{display:block;width:100%;max-width:100%;max-height:220px;background:#000}
 <div id="detail"></div><div class="count" id="count">Loading game list…</div><div class="grid" id="games"></div>
 </section>
 </main>
+<div id="launch-countdown" class="launch-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="launch-countdown-title">
+ <div class="launch-dialog"><h2 id="launch-countdown-title">Cabinet powered on</h2><p id="launch-countdown-message"></p><button id="launch-now-button" class="launch" type="button">LAUNCH GAME NOW</button></div>
+</div>
 <script>
 let games=[],cabinets=[],catalogueSystems=[],mode='all',selected=null;
 const el=id=>document.getElementById(id);
@@ -209,6 +215,16 @@ async function powerOnClassicAndWait(cabinetId,cabinetName,status){
  }
  throw new Error('Cabinet did not report power ON within 60 seconds. Game was not loaded.');
 }
+function waitForClassicNetdimmReady(cabinetName){
+ const overlay=el('launch-countdown'),message=el('launch-countdown-message'),button=el('launch-now-button');
+ return new Promise(resolve=>{
+  let remaining=30,interval;
+  const update=()=>{message.textContent=cabinetName+' is powered on. NetDIMM will launch automatically in '+remaining+' seconds. Press below to launch immediately.'};
+  const finish=()=>{clearInterval(interval);button.removeEventListener('click',finish);overlay.hidden=true;resolve()};
+  button.addEventListener('click',finish,{once:true});overlay.hidden=false;update();
+  interval=setInterval(()=>{remaining-=1;if(remaining<=0)finish();else update()},1000);
+ });
+}
 async function launch(filename){
  const cabinetId=el('detail-cabinet').value,status=el('load-status');
  if(!cabinetId){status.textContent='Choose a cabinet first.';return}
@@ -219,6 +235,7 @@ async function launch(filename){
    const name=attempt.result.cabinet_name||'The selected cabinet';
    if(!confirm(name+' is powered off. Turn it on and launch this game?')){status.textContent='Launch cancelled. Cabinet remains off.';return}
    await powerOnClassicAndWait(cabinetId,name,status);
+   await waitForClassicNetdimmReady(name);
    attempt=await submitClassicLoad(filename,cabinetId);
    if(attempt.powerRequired)throw new Error('Cabinet still reports power OFF. Game was not loaded.');
   }
