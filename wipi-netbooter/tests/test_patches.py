@@ -1,3 +1,4 @@
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -112,7 +113,7 @@ class NaomiPatchTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "expected exactly"):
             app.apply_documented_byte_patch(b"short", "capcom_vs_snk_force_freeplay")
 
-    def test_removed_sfz3_region_unlock_cannot_be_offered_or_reapplied(self):
+    def test_removed_sfz3_region_unlock_is_filtered_from_legacy_profiles(self):
         self.assertNotIn("naomi_region_unlock", app.PATCH_DEFINITIONS)
         game = {
             "filename": "sfz3upper.bin",
@@ -121,15 +122,19 @@ class NaomiPatchTests(unittest.TestCase):
             "audit_name": "",
             "game_id": "BCY0",
         }
-        with patch.object(app, "load_patch_settings", return_value={}):
-            options = app.game_patch_options(game)
-        self.assertNotIn("naomi_region_unlock", {entry["id"] for entry in options})
-        with patch.object(app, "load_patch_settings", return_value={
-            "sfz3upper.bin": ["naomi_region_unlock"]
-        }):
-            with patch.object(app, "discover_games", return_value=([game], None)):
-                with self.assertRaisesRegex(ValueError, "Unsupported patch selection"):
-                    app.apply_game_patches(b"ROM", "sfz3upper.bin", {"target": "naomi"})
+        with tempfile.TemporaryDirectory() as directory:
+            settings_path = Path(directory) / "patch_settings.json"
+            settings_path.write_text(json.dumps({
+                "sfz3upper.bin": ["naomi_region_unlock"]
+            }), encoding="utf-8")
+            with patch.object(app, "PATCH_SETTINGS_FILE", settings_path):
+                self.assertEqual(app.load_patch_settings(), {})
+                options = app.game_patch_options(game)
+                self.assertNotIn("naomi_region_unlock", {entry["id"] for entry in options})
+                self.assertEqual(
+                    app.apply_game_patches(b"ROM", "sfz3upper.bin", {"target": "naomi"}),
+                    (b"ROM", []),
+                )
 
 
 if __name__ == "__main__":

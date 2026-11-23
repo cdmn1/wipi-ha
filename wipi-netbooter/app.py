@@ -350,8 +350,16 @@ def safe_rom(filename: str) -> Path:
 def load_patch_settings() -> dict[str, list[str]]:
     try:
         raw = json.loads(PATCH_SETTINGS_FILE.read_text(encoding="utf-8"))
-        return {str(key): [str(item) for item in value if isinstance(item, str)]
-                for key, value in raw.items() if isinstance(value, list)}
+        settings: dict[str, list[str]] = {}
+        for key, value in raw.items():
+            if not isinstance(value, list):
+                continue
+            # Retire the known-bad SFZ3 Upper region unlock from legacy profiles.
+            selected = [str(item) for item in value
+                        if isinstance(item, str) and item != "naomi_region_unlock"]
+            if selected:
+                settings[str(key)] = selected
+        return settings
     except (OSError, json.JSONDecodeError, AttributeError):
         return {}
 
@@ -413,8 +421,43 @@ def apply_illvelo_force_freeplay(data: bytes) -> bytes:
     """Backward-compatible wrapper for the original Illvelo patch test."""
     return apply_documented_byte_patch(data, "illvelo_force_freeplay")
 
+def binary_patch_preconditions_match(data: bytes, patch_lines: list[str]) -> bool:
+    """Check the declared image size and every upstream BinaryDiff preimage byte."""
+    required_size = BinaryDiff.size(patch_lines)
+    if required_size is not None and len(data) != required_size:
+        return False
+    for line_number, line in enumerate(patch_lines, start=1):
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        try:
+            offset_text, changes = line.split(":", 1)
+            before_text, after_text = changes.split("->", 1)
+            before = before_text.strip().split()
+            after = after_text.strip().split()
+            offset = int(offset_text.strip(), 16)
+        except ValueError as exc:
+            raise ValueError(f"Malformed BinaryDiff line {line_number}: {line}") from exc
+        if len(before) != len(after):
+            raise ValueError(f"BinaryDiff line {line_number} has different before/after lengths.")
+        if offset < 0 or offset + len(before) > len(data):
+            return False
+        for index, token in enumerate(before):
+            if token == "*":
+                continue
+            try:
+                expected = int(token, 16)
+            except ValueError as exc:
+                raise ValueError(f"Invalid expected byte on BinaryDiff line {line_number}: {token}") from exc
+            if not 0 <= expected <= 0xFF:
+                raise ValueError(f"Invalid expected byte on BinaryDiff line {line_number}: {token}")
+            if data[offset + index] != expected:
+                return False
+    return True
+
+
 def apply_binary_patch(data: bytes, patch_id: str) -> bytes:
-    """Apply an upstream BinaryDiff patch only when size and every preimage match."""
+    """Apply an upstream BinaryDiff patch only after validating every preimage byte."""
     definition = PATCH_DEFINITIONS.get(patch_id)
     if not definition or not definition.get("patch_file"):
         raise ValueError(f"Unknown upstream binary patch: {patch_id}")
@@ -446,8 +489,8 @@ def apply_binary_patch(data: bytes, patch_id: str) -> bytes:
     try:
         applicable = BinaryDiff.can_patch(data, patch_lines)
     except Exception as exc:
-        raise ValueError(f"{definition['title']}: could not validate patch preconditions: {exc}") from exc
-    if not applicable:
+        raise ValueError(f"{definition['title']}: could not validate patch size/format: {exc}") from exc
+    if not applicable or not binary_patch_preconditions_match(data, patch_lines):
         raise ValueError(
             f"{definition['title']} was not applied: ROM size or one or more expected "
             "byte sequences do not match the upstream patch preconditions."
@@ -468,8 +511,6 @@ def apply_game_patches(data: bytes, filename: str, cabinet: dict[str, str]) -> t
     allowed = {patch["id"] for patch in game_patch_options(game)}
     unknown = selected - allowed
     if unknown:
-        # Reject legacy saved selections of the removed SFZ3 Upper region-unlock
-        # option as unsupported, so it cannot be silently re-applied on load.
         raise ValueError("Unsupported patch selection: " + ", ".join(sorted(unknown)))
     for patch_id in sorted(selected):
         definition = PATCH_DEFINITIONS[patch_id]

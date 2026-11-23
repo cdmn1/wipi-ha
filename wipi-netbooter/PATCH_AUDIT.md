@@ -14,7 +14,7 @@ This audit distinguishes upstream patch definitions from verified hardware behav
 - Added all-character-unlocked patches for Marvel vs. Capcom 2 and both named CvS2 variants.
 - Added the missing original CvS, CvS2 MOTM and CvS2 MF Force Free Play / Silent Attract entries, with exact ROM-size checks.
 - Switched upstream multi-hunk patches to arcadeutils BinaryDiff. It checks the declared file size and every expected byte before applying any hunk.
-- Removed the SFZ3 Upper region-unlock option and its code path. A legacy saved selection is now rejected before transfer.
+- Removed the SFZ3 Upper region-unlock option and its code path. Legacy saved selections are filtered out and never applied.
 - Left the existing Illvelo Force Free Play definition and behavior unchanged.
 
 ## Additional Force Free Play / Silent Attract coverage
@@ -90,9 +90,9 @@ Ikaruga stores game settings in 32 KiB SRAM rather than EEPROM. NaomiSettingsPat
 - BinaryDiff.can_patch() is mandatory before BinaryDiff.patch(); wrong size or any mismatching preimage causes a safe failure before the transfer buffer is modified.
 - MVC2 unlock also requires ROM serial BBG0. The two CvS2 unlock files have no serial guard upstream; the app restricts them by distinct title/filename aliases and all 16 byte preimages.
 - New patch selections are never enabled automatically.
-- The SFZ3 Upper region-unlock patch is removed from the selectable catalogue and ROM-load path. A stale saved selection is rejected as unsupported. The separate SFZ3 Upper Free Play/Silent Attract definitions remain distinct.
+- The SFZ3 Upper region-unlock patch is removed from the selectable catalogue and ROM-load path. A stale saved selection is filtered out so the game can still load without the patch. The separate SFZ3 Upper Free Play/Silent Attract definitions remain distinct.
 - The existing Illvelo Force Free Play patch is unchanged.
-- Automated tests cover BinaryDiff application/failure, file-size/preimage guards, serial checks, game-specific option matching, Illvelo regression and rejection of the removed SFZ3 region-unlock selection.
+- Automated tests cover BinaryDiff application/failure, file-size/preimage guards, serial checks, game-specific option matching, Illvelo regression and filtering of legacy SFZ3 region-unlock selections.
 - No actual ROM set or physical cabinet has been tested by this change.
 
 ## Sources
