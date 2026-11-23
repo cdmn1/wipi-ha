@@ -778,8 +778,8 @@ function renderGameSettings(wrapper){
    // focused on standard 1:1 (#1) and Free Play (#27), without changing
    // the underlying settings object or discarding any EEPROM bytes.
    if(/coin/i.test(String(setting.name||''))){
-    const numberedOne=entries.filter(([value,label])=>/#\s*0*1\b/i.test(String(label)));
-    const freePlay=entries.filter(([value,label])=>/free\s*play/i.test(String(label))||/#\s*0*27\b/i.test(String(label)));
+    const numberedOne=entries.filter(([value,label])=>/#\\s*0*1\\b/i.test(String(label)));
+    const freePlay=entries.filter(([value,label])=>/free\\s*play/i.test(String(label))||/#\\s*0*27\\b/i.test(String(label)));
     const first=numberedOne.length?numberedOne:[entries[0]].filter(Boolean);
     const last=freePlay.length?freePlay:(entries.length>=27?[entries[entries.length-1]]:[]);
     entries=[...new Map([...first,...last].map(entry=>[entry[0],entry])).values()];
