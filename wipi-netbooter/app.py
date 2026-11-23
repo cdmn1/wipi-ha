@@ -33,6 +33,11 @@ try:
 except ImportError:
     NetDimm = NetDimmTargetEnum = NetDimmVersionEnum = None
 
+try:
+    from arcadeutils.binary import BinaryDiff
+except ImportError:
+    BinaryDiff = None
+
 OPTIONS_FILE = Path("/data/options.json")
 DEFAULT_ROM_PATH = "/media/NAOMI"
 ALLOWED_ROOTS = (Path("/media"), Path("/share"))
@@ -52,14 +57,9 @@ TIME_HACK_INTERVAL = 5
 TIME_HACK_LIMIT_MS = 10 * 60 * 1000
 CATALOGUE_LOCK = threading.Lock()
 PATCH_SETTINGS_FILE = Path("/data/patch_settings.json")
+PATCHES_DIR = Path(__file__).with_name("patches")
 PATCH_SETTINGS_LOCK = threading.Lock()
-PATCH_DEFINITIONS = {
-    "naomi_region_unlock": {
-        "title": "Region unlock (Japan / USA / Export)",
-        "description": "Allows this Japanese-only game to boot on Japanese, USA and Export NAOMI BIOS regions.",
-        "game_ids": {"BCY0"},
-    },
-}
+PATCH_DEFINITIONS: dict[str, dict[str, Any]] = {}
 
 # Documented byte patches from DragonMinded's Naomi netboot patch research.
 # Every patch verifies the original bytes before modifying the upload buffer.
@@ -81,7 +81,16 @@ _DOCUMENTED_GAME_PATCHES = [
     ("trigger_heart_exelica", "Trigger Heart Exelica", ("trigger heart exelica",), ("triggere", "exelica"), 0x13E522, 0x13E5AA),
     ("trizeal", "Trizeal", ("trizeal",), ("trizeal",), 0xBE782, 0xBE808),
     ("under_defeat", "Under Defeat", ("under defeat",), ("underdefeat", "under_defeat"), 0x43FD6, 0x4405C),
+    ("capcom_vs_snk", "Capcom vs. SNK: Millennium Fight 2000", ("capcom vs snk: millennium fight 2000", "capcom vs snk millennium fight 2000"), ("capcom_vs_snk_millenium_fight_2000",), 0xFF358, 0xFF3EC),
+    ("capcom_vs_snk_2_motm", "Capcom vs. SNK 2: Mark of the Millennium 2001", ("capcom vs snk 2: mark of the millennium 2001", "capcom vs. snk 2: mark of the millennium 2001"), ("cvs2motm", "capcom_vs_snk_2_mark_of_the_millennium_2001"), 0x116E58, 0x116EEC),
+    ("capcom_vs_snk_2_mf", "Capcom vs. SNK 2: Millionaire Fighting 2001", ("capcom vs snk 2: millionaire fighting 2001", "capcom vs. snk 2: millionaire fighting 2001"), ("cvs2mf", "capcom_vs_snk_2_millionaire_fighting_2001"), 0x1161F8, 0x11628C),
 ]
+
+_DOCUMENTED_GAME_PATCH_SIZES = {
+    "capcom_vs_snk": 125829120,
+    "capcom_vs_snk_2_motm": 159383552,
+    "capcom_vs_snk_2_mf": 159383552,
+}
 
 for _key, _title, _names, _files, _freeplay, _silent in _DOCUMENTED_GAME_PATCHES:
     for _suffix, _label, _offset, _expected, _replacement in (
@@ -90,7 +99,7 @@ for _key, _title, _names, _files, _freeplay, _silent in _DOCUMENTED_GAME_PATCHES
     ):
         if _offset is None:
             continue
-        PATCH_DEFINITIONS[f"{_key}_{_suffix}"] = {
+        _definition = {
             "title": f"{_label} — {_title} (community patch)",
             "description": f"Applies the documented {_label.lower()} byte patch for {_title}. The original ROM file is never modified.",
             "filename_contains": set(_files),
@@ -100,6 +109,88 @@ for _key, _title, _names, _files, _freeplay, _silent in _DOCUMENTED_GAME_PATCHES
             "replacement": _replacement,
             "target": "naomi",
         }
+        if _key in _DOCUMENTED_GAME_PATCH_SIZES:
+            _definition["file_size"] = _DOCUMENTED_GAME_PATCH_SIZES[_key]
+        PATCH_DEFINITIONS[f"{_key}_{_suffix}"] = _definition
+
+for _suffix in ("force_freeplay", "silent_attract"):
+    PATCH_DEFINITIONS[f"capcom_vs_snk_{_suffix}"]["filename_stems"] = {"capsnk"}
+
+PATCH_DEFINITIONS.update({
+    "crazy_taxi_force_freeplay": {
+        "title": "Force Free Play — Crazy Taxi (upstream patch)",
+        "description": "Direct game-code patch. Requires the exact 128 MiB image, header ID BAC0 at 0x134, and all expected bytes.",
+        "patch_file": "CrazyTaxi_freeplay.binpatch",
+        "filename_contains": {"crazytaxi", "crazy_taxi"},
+        "catalogue_name_contains": {"crazy taxi"},
+        "target": "naomi",
+    },
+    "crazy_taxi_silent_attract": {
+        "title": "Silent Attract — Crazy Taxi (upstream patch)",
+        "description": "Direct game-code patch. Requires the exact 128 MiB image, header ID BAC0 at 0x134, and all expected bytes.",
+        "patch_file": "CrazyTaxi_no_attract.binpatch",
+        "filename_contains": {"crazytaxi", "crazy_taxi"},
+        "catalogue_name_contains": {"crazy taxi"},
+        "target": "naomi",
+    },
+    "crazy_taxi_noprotect": {
+        "title": "Header protection bypass — Crazy Taxi (upstream patch)",
+        "description": "Prerequisite for modifying header/EEPROM settings. Requires the exact 128 MiB image, header ID BAC0 at 0x134, and all expected bytes. Does not attach an EEPROM profile by itself.",
+        "patch_file": "CrazyTaxi_noprotect.binpatch",
+        "filename_contains": {"crazytaxi", "crazy_taxi"},
+        "catalogue_name_contains": {"crazy taxi"},
+        "target": "naomi",
+    },
+    "jambo_safari_force_freeplay": {
+        "title": "Force Free Play — Jambo Safari (upstream patch)",
+        "description": "Direct game-code patch. Requires the exact 72 MiB image, header ID BAU0 at 0x134, and all expected bytes.",
+        "patch_file": "Jambo_Safari_freeplay.binpatch",
+        "filename_contains": {"jambosafari", "jambo_safari"},
+        "catalogue_name_contains": {"jambo safari"},
+        "target": "naomi",
+    },
+    "jambo_safari_silent_attract": {
+        "title": "Silent Attract — Jambo Safari (upstream patch)",
+        "description": "Direct game-code patch. Requires the exact 72 MiB image, header ID BAU0 at 0x134, and all expected bytes.",
+        "patch_file": "Jambo_Safari_no_attract.binpatch",
+        "filename_contains": {"jambosafari", "jambo_safari"},
+        "catalogue_name_contains": {"jambo safari"},
+        "target": "naomi",
+    },
+    "jambo_safari_noprotect": {
+        "title": "Header protection bypass — Jambo Safari (upstream patch)",
+        "description": "Prerequisite for modifying header/EEPROM settings. Requires the exact 72 MiB image, header ID BAU0 at 0x134, and all expected bytes. Does not attach an EEPROM profile by itself.",
+        "patch_file": "Jambo_Safari_noprotect.binpatch",
+        "filename_contains": {"jambosafari", "jambo_safari"},
+        "catalogue_name_contains": {"jambo safari"},
+        "target": "naomi",
+    },
+    "marvel_vs_capcom_2_unlocked": {
+        "title": "All characters unlocked — Marvel vs. Capcom 2 (upstream patch)",
+        "description": "Applies the upstream character-unlock patch. Requires ROM serial BBG0, the exact 143242752-byte image, and all expected bytes.",
+        "patch_file": "MarvelVsCapcom2_unlocked.binpatch",
+        "required_serial": "BBG0",
+        "filename_contains": {"mvsc2", "mvsc-2", "marvelvscapcom2"},
+        "catalogue_name_contains": {"marvel vs. capcom 2", "marvel vs capcom 2"},
+        "target": "naomi",
+    },
+    "capcom_vs_snk_2_motm_unlocked": {
+        "title": "All characters unlocked — CvS2 Mark of the Millennium 2001 (upstream patch)",
+        "description": "Applies the upstream character-unlock patch. Requires the exact 159383552-byte image and all 16 expected-byte checks; the upstream patch has no ROM-serial guard, so use only on this exact game variant.",
+        "patch_file": "Capcom_vs_SNK_2_Mark_Of_The_Millennium_2001_unlocked.binpatch",
+        "filename_contains": {"cvs2motm", "capcom_vs_snk_2_mark_of_the_millennium_2001"},
+        "catalogue_name_contains": {"capcom vs snk 2: mark of the millennium 2001", "capcom vs. snk 2: mark of the millennium 2001"},
+        "target": "naomi",
+    },
+    "capcom_vs_snk_2_mf_unlocked": {
+        "title": "All characters unlocked — CvS2 Millionaire Fighting 2001 (upstream patch)",
+        "description": "Applies the upstream character-unlock patch. Requires the exact 159383552-byte image and all 16 expected-byte checks; the upstream patch has no ROM-serial guard, so use only on this exact game variant.",
+        "patch_file": "Capcom_vs_SNK_2_Millionaire_Fighting_2001_unlocked.binpatch",
+        "filename_contains": {"cvs2mf", "capcom_vs_snk_2_millionaire_fighting_2001"},
+        "catalogue_name_contains": {"capcom vs snk 2: millionaire fighting 2001", "capcom vs. snk 2: millionaire fighting 2001"},
+        "target": "naomi",
+    },
+})
 
 CATALOGUE_COLUMNS = [
     "system", "romname", "image", "video", "description", "lcd_description",
@@ -300,6 +391,12 @@ def apply_documented_byte_patch(data: bytes, patch_id: str) -> bytes:
     original = bytes.fromhex(str(definition["expected"]))
     replacement = bytes.fromhex(str(definition["replacement"]))
     title = str(definition["title"])
+    required_size = definition.get("file_size")
+    if required_size is not None and len(data) != int(required_size):
+        raise ValueError(
+            f"{title}: ROM size is {len(data)} bytes; expected exactly "
+            f"{int(required_size)} bytes for this documented image."
+        )
     if len(data) < offset + len(original):
         raise ValueError(f"{title}: ROM is too small for the documented patch.")
     actual = data[offset:offset + len(original)]
@@ -316,20 +413,49 @@ def apply_illvelo_force_freeplay(data: bytes) -> bytes:
     """Backward-compatible wrapper for the original Illvelo patch test."""
     return apply_documented_byte_patch(data, "illvelo_force_freeplay")
 
-def apply_naomi_region_unlock(data: bytes) -> bytes:
-    if NaomiRom is None or NaomiRomRegionEnum is None:
-        raise RuntimeError("NAOMI ROM tools are unavailable; cannot apply the region unlock.")
-    rom = NaomiRom(data)
-    if not rom.valid:
-        raise ValueError("This image is not a valid NAOMI NetDIMM ROM; region unlock was not applied.")
-    regions = list(rom.regions)
-    for region in (NaomiRomRegionEnum.REGION_JAPAN,
-                   NaomiRomRegionEnum.REGION_USA,
-                   NaomiRomRegionEnum.REGION_EXPORT):
-        if region not in regions:
-            regions.append(region)
-    rom.regions = regions
-    return rom.data
+def apply_binary_patch(data: bytes, patch_id: str) -> bytes:
+    """Apply an upstream BinaryDiff patch only when size and every preimage match."""
+    definition = PATCH_DEFINITIONS.get(patch_id)
+    if not definition or not definition.get("patch_file"):
+        raise ValueError(f"Unknown upstream binary patch: {patch_id}")
+    if BinaryDiff is None:
+        raise RuntimeError("arcadeutils BinaryDiff is unavailable; refusing to apply the patch.")
+    patch_file = str(definition["patch_file"])
+    if Path(patch_file).name != patch_file:
+        raise ValueError("Invalid patch file path.")
+    patch_path = PATCHES_DIR / patch_file
+    try:
+        patch_lines = patch_path.read_text(encoding="utf-8").splitlines()
+    except OSError as exc:
+        raise RuntimeError(f"Could not read upstream patch file {patch_file}: {exc}") from exc
+
+    required_serial = definition.get("required_serial")
+    if required_serial:
+        if NaomiRom is None:
+            raise RuntimeError("Naomi ROM tools are unavailable; refusing a serial-specific patch.")
+        rom = NaomiRom(data)
+        if not rom.valid:
+            raise ValueError(f"{definition['title']}: input is not a valid Naomi ROM.")
+        if rom.serial != str(required_serial).encode("ascii"):
+            actual = rom.serial.decode("ascii", errors="replace")
+            raise ValueError(
+                f"{definition['title']} requires Naomi ROM serial {required_serial}; "
+                f"this image reports {actual!r}."
+            )
+
+    try:
+        applicable = BinaryDiff.can_patch(data, patch_lines)
+    except Exception as exc:
+        raise ValueError(f"{definition['title']}: could not validate patch preconditions: {exc}") from exc
+    if not applicable:
+        raise ValueError(
+            f"{definition['title']} was not applied: ROM size or one or more expected "
+            "byte sequences do not match the upstream patch preconditions."
+        )
+    try:
+        return BinaryDiff.patch(data, patch_lines)
+    except Exception as exc:
+        raise ValueError(f"{definition['title']} could not be applied safely: {exc}") from exc
 
 
 def apply_game_patches(data: bytes, filename: str, cabinet: dict[str, str]) -> tuple[bytes, list[str]]:
@@ -342,17 +468,19 @@ def apply_game_patches(data: bytes, filename: str, cabinet: dict[str, str]) -> t
     allowed = {patch["id"] for patch in game_patch_options(game)}
     unknown = selected - allowed
     if unknown:
+        # Reject legacy saved selections of the removed SFZ3 Upper region-unlock
+        # option as unsupported, so it cannot be silently re-applied on load.
         raise ValueError("Unsupported patch selection: " + ", ".join(sorted(unknown)))
-    if "naomi_region_unlock" in selected:
-        if cabinet["target"] != "naomi":
-            raise ValueError("The NAOMI region unlock is only supported on NAOMI cabinets.")
-        data = apply_naomi_region_unlock(data)
     for patch_id in sorted(selected):
         definition = PATCH_DEFINITIONS[patch_id]
-        if definition.get("offset") is not None:
-            if cabinet["target"] != definition.get("target", "naomi"):
-                raise ValueError(f"The {definition['title']} patch is only supported on NAOMI cabinets.")
+        if cabinet["target"] != definition.get("target", "naomi"):
+            raise ValueError(f"The {definition['title']} patch is only supported on NAOMI cabinets.")
+        if definition.get("patch_file"):
+            data = apply_binary_patch(data, patch_id)
+        elif definition.get("offset") is not None:
             data = apply_documented_byte_patch(data, patch_id)
+        else:
+            raise ValueError(f"Patch {patch_id} has no supported patch mechanism.")
     return data, sorted(selected)
 
 

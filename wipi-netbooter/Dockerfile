@@ -9,5 +9,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app.py classic.html ./
+COPY patches ./patches
+COPY tests ./tests
 EXPOSE 8256
 CMD ["python", "/app/app.py"]
