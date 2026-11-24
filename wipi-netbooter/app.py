@@ -888,7 +888,7 @@ async function powerOnAndWait(cabinetId,cabinetName,status){
 function waitForNetdimmReady(cabinetName){
  const overlay=document.getElementById('launch-countdown'),message=document.getElementById('launch-countdown-message'),button=document.getElementById('launch-now-button');
  return new Promise(resolve=>{
-  let remaining=30,interval;
+  let remaining=35,interval;
   const update=()=>{message.textContent=cabinetName+' is powered on. NetDIMM will launch automatically in '+remaining+' seconds. Press below to launch immediately.'};
   const finish=()=>{clearInterval(interval);button.removeEventListener('click',finish);overlay.hidden=true;resolve()};
   button.addEventListener('click',finish,{once:true});overlay.hidden=false;update();
