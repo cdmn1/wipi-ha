@@ -2,6 +2,11 @@
 
 Notable changes to WiPi Netbooter are documented here. Newest releases appear first.
 
+## 0.4.7
+
+- Increased the automatic NetDIMM launch countdown after powering on a cabinet from 30 to 35 seconds in both the Modern and Classic interfaces.
+
+
 ## 0.4.5
 
 - Added a pre-launch cabinet power check. If a configured cabinet outlet is OFF, both interfaces offer to power it on before loading a game.
