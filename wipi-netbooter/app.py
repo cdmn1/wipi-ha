@@ -312,6 +312,7 @@ def discover_games() -> tuple[list[dict[str, Any]], str | None]:
                 row = metadata.get(path.name, {})
                 games.append({
                     "filename": path.name,
+                    "file_mtime": path.stat().st_mtime,
                     "name": row.get("description") or row.get("romname") or path.name,
                     "description": row.get("description", ""),
                     "lcd_description": row.get("lcd_description", ""),
@@ -685,6 +686,7 @@ input{flex:1;min-width:220px}button{cursor:pointer;background:#087eb7;border-col
 <select id="genre" onchange="filterGames()"><option value="">All genres</option></select>
 <select id="orientation" onchange="filterGames()"><option value="">All orientations</option></select>
 <select id="controls" onchange="filterGames()"><option value="">All controls</option></select>
+<select id="sort" onchange="filterGames()" aria-label="Sort games"><option value="name">Sort: A–Z</option><option value="date">Date added: newest first</option></select>
 <label class="muted"><input id="favourites" type="checkbox" onchange="filterGames()" style="min-width:auto;flex:0"> Favourites</label>
 <label class="muted"><input id="show-disabled" type="checkbox" onchange="filterGames()" style="min-width:auto;flex:0"> Show disabled</label>
 <select id="cabinet"><option value="">Choose cabinet…</option></select>
@@ -727,7 +729,9 @@ function filterGames(){
  const q=document.getElementById('search').value.toLowerCase(),s=document.getElementById('system').value,g=document.getElementById('genre').value;
  const o=document.getElementById('orientation').value,c=document.getElementById('controls').value;
  const favourites=document.getElementById('favourites').checked,showDisabled=document.getElementById('show-disabled').checked;
+ const sort=document.getElementById('sort').value;
  const shown=games.filter(x=>(showDisabled||x.enabled)&&(!favourites||x.favourite)&&(!q||(x.name+' '+x.filename+' '+x.manufacturer).toLowerCase().includes(q))&&(!s||x.system===s)&&(!g||x.genre===g)&&(!o||x.orientation===o)&&(!c||x.controls===c));
+ shown.sort((a,b)=>sort==='date'?(b.file_mtime||0)-(a.file_mtime||0):a.name.localeCompare(b.name,undefined,{sensitivity:'base'}));
  document.getElementById('summary').textContent=String(shown.length)+' of '+String(games.length)+' games';
  document.getElementById('games').innerHTML=shown.map(x=>{
   const art=x.image?'<img loading="lazy" src="/art/'+encodeURIComponent(x.image)+'" onerror="this.remove()">':'NAOMI';
