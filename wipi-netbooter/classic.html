@@ -78,6 +78,7 @@ video{display:block;width:100%;max-width:100%;max-height:220px;background:#000}
 <select id="genre"><option value="">All genres</option></select>
 <select id="orientation"><option value="">All orientations</option></select>
 <select id="controls"><option value="">All controls</option></select>
+<select id="sort" aria-label="Sort games"><option value="name">Sort: A–Z</option><option value="date">Date added: newest first</option></select>
 <select id="cabinet"><option value="">Choose cabinet…</option></select>
 </div>
 <div id="detail"></div><div class="count" id="count">Loading game list…</div><div class="grid" id="games"></div>
@@ -98,7 +99,7 @@ async function init(){
  }
  cabinets.forEach(c=>{const o=document.createElement('option');o.value=c.id;o.textContent=c.name+' ('+c.ip+')';el('cabinet').appendChild(o)});
  el('cabinet-list').innerHTML=cabinets.length?cabinets.map(c=>'<div class="panel"><strong>'+esc(c.name)+'</strong> — '+esc(c.ip)+' · '+esc(c.target)+' · firmware '+esc(c.firmware)+(c.power_entity?'<p>Power entity: '+esc(c.power_entity)+' · State: <span id="power-state-'+esc(c.id)+'">'+esc(c.power_state||'unknown')+'</span></p><button type="button" data-power="on" data-cabinet="'+esc(c.id)+'">POWER ON</button> <button type="button" data-power="off" data-cabinet="'+esc(c.id)+'">POWER OFF</button>':'<p class="muted">No Power entity configured.</p>')+'</div>').join(''):'<p class="muted">No cabinets configured yet.</p>';
- ['search','system','genre','orientation','controls'].forEach(id=>el(id).addEventListener(id==='search'?'input':'change',render));
+ ['search','system','genre','orientation','controls','sort'].forEach(id=>el(id).addEventListener(id==='search'?'input':'change',render));
  el('all-tab').onclick=()=>setMode('all');el('fave-tab').onclick=()=>setMode('favourites');el('editor-tab').onclick=()=>setMode('editor');el('setup-tab').onclick=()=>setMode('setup');
  el('cabinet-list').addEventListener('click',handleCabinetPower);
  populateEditor();el('edit-rom').addEventListener('change',loadEditorEntry);el('catalogue-form').addEventListener('submit',saveCatalogueEntry);
@@ -123,6 +124,8 @@ function render(){
  if(mode==='setup')return;
  const q=el('search').value.toLowerCase(),s=el('system').value,g=el('genre').value,o=el('orientation').value,c=el('controls').value;
  const shown=games.filter(x=>x.enabled&&(mode!=='favourites'||x.favourite)&&(!q||(x.name+' '+x.filename+' '+x.manufacturer).toLowerCase().includes(q))&&(!s||x.system===s)&&(!g||x.genre===g)&&(!o||x.orientation===o)&&(!c||x.controls===c));
+ const sort=el('sort').value;
+ shown.sort((a,b)=>sort==='date'?(b.file_mtime||0)-(a.file_mtime||0):a.name.localeCompare(b.name,undefined,{sensitivity:'base'}));
  el('count').textContent=shown.length+' games · '+(mode==='favourites'?'Favourites':'All enabled games');
  el('games').innerHTML=shown.map((x,i)=>'<article class="game" data-index="'+games.indexOf(x)+'"><div class="art">'+(x.image?'<img loading="lazy" src="/art/'+encodeURIComponent(x.image)+'" onerror="this.remove()">':'NAOMI')+'</div><div class="gname">'+esc(x.name)+(x.favourite?' ★':'')+'</div><div class="meta">'+esc(x.system)+' · '+esc(x.year)+'<br>'+esc(x.genre)+'</div></article>').join('');
  document.querySelectorAll('[data-index]').forEach(node=>node.onclick=()=>showDetail(games[Number(node.dataset.index)]));
