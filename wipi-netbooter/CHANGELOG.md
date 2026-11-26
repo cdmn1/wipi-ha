@@ -2,6 +2,10 @@
 
 Notable changes to WiPi Netbooter are documented here. Newest releases appear first.
 
+## 0.4.9
+
+- Simplified the NAOMI EEPROM settings editor by hiding low-level coin/credit configuration fields (coins per credit, multipliers, bonus coins and sequence options). Kept the simple Coin/Credit Assignment selector, limited to 1:1 and Free Play.
+
 ## 0.4.8
 
 - Added game sorting to both Modern and Classic interfaces: alphabetical by title (default), or by ROM file modification date with newest files first. The date is read from each actual .bin/.bin.gz file, not the catalogue's game-release year.
