@@ -2,6 +2,10 @@
 
 Notable changes to WiPi Netbooter are documented here. Newest releases appear first.
 
+## 0.4.8
+
+- Added game sorting to both Modern and Classic interfaces: alphabetical by title (default), or by ROM file modification date with newest files first. The date is read from each actual .bin/.bin.gz file, not the catalogue's game-release year.
+
 ## 0.4.7
 
 - Increased the automatic NetDIMM launch countdown after powering on a cabinet from 30 to 35 seconds in both the Modern and Classic interfaces.
