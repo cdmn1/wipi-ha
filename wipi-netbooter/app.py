@@ -824,7 +824,15 @@ function renderGameSettings(wrapper){
  const groups=[['System settings',wrapper.system],['Game settings',wrapper.game]];
  root.innerHTML=groups.map(([title,group])=>{
   if(!group||!Array.isArray(group.settings)||!group.settings.length)return '';
-  return '<h3>'+title+'</h3>'+group.settings.map((setting,index)=>{
+  const visibleSettings=group.settings.map((setting,index)=>({setting,index})).filter(({setting})=>{
+   const name=String(setting.name||'');
+   // Keep only the simple Coin/Credit Assignment choice (restricted below
+   // to 1:1 and Free Play). Hide low-level coin/credit fields such as coins
+   // per credit, multipliers, bonus coins and sequence options.
+   return !(/coin|credit|sequence/i.test(name)&&!/coin\\s*\\/\\s*credit\\s*assignment/i.test(name));
+  });
+  if(!visibleSettings.length)return '';
+  return '<h3>'+title+'</h3>'+visibleSettings.map(({setting,index})=>{
    const values=setting.values;
    if(!values||typeof values!=='object'||setting.read_only===true)return '';
    let entries=Object.entries(values);
