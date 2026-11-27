@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.10
+
+- Added EEPROM settings access to the Classic interface for Naomi games, matching the Modern interface. The editor uses ROM-declared regions and the simplified settings filter; saved profiles do not modify ROMs or apply settings to the cabinet.
+
 Notable changes to WiPi Netbooter are documented here. Newest releases appear first.
 
 ## 0.4.9
