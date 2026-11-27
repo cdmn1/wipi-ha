@@ -201,15 +201,15 @@ function renderClassicEepromSettings(wrapper){
   if(!group||!Array.isArray(group.settings)||!group.settings.length)return '';
   const visible=group.settings.map((setting,index)=>({setting,index})).filter(({setting})=>{
    const name=String(setting.name||'');
-   return !(/coin|credit|sequence/i.test(name)&&!/coin\\s*\\/\\s*credit\\s*assignment/i.test(name));
+   return !(/coin|credit|sequence/i.test(name)&&!/coin\s*\/\s*credit\s*assignment/i.test(name));
   });
   if(!visible.length)return '';
   return '<h3>'+title+'</h3>'+visible.map(({setting,index})=>{
    const values=setting.values;if(!values||typeof values!=='object'||setting.read_only===true)return '';
    let entries=Object.entries(values);
    if(/coin/i.test(String(setting.name||''))){
-    const one=entries.filter(([value,label])=>/#\\s*0*1\\b/i.test(String(label)));
-    const free=entries.filter(([value,label])=>/free\\s*play/i.test(String(label))||/#\\s*0*27\\b/i.test(String(label)));
+    const one=entries.filter(([value,label])=>/#\s*0*1\b/i.test(String(label)));
+    const free=entries.filter(([value,label])=>/free\s*play/i.test(String(label))||/#\s*0*27\b/i.test(String(label)));
     const first=one.length?one:[entries[0]].filter(Boolean),last=free.length?free:(entries.length>=27?[entries[entries.length-1]]:[]);
     entries=[...new Map([...first,...last].map(entry=>[entry[0],entry])).values()];
    }
