@@ -16,7 +16,7 @@ input,select{background:#102536;border:1px solid #527084;color:#fff;padding:10px
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(175px,1fr));gap:14px}
 .game{background:#102536;border:1px solid #31546a;text-align:center;padding:10px;cursor:pointer;min-width:0}
 .game:hover{border-color:#37b5ed;background:#18384e}.art{height:112px;background:#1b3a50;display:flex;align-items:center;justify-content:center;color:#9cb7c7;margin-bottom:9px}
-.art img{max-width:100%;max-height:100%;object-fit:contain}.gname{font-weight:bold;font-size:14px;min-height:34px}.meta{color:#9cb7c7;font-size:11px;margin-top:5px}
+.art img{max-width:100%;max-height:100%;object-fit:contain}.gname{font-weight:bold;font-size:14px;min-height:34px}.region-flag{display:inline-block;position:relative;width:20px;height:14px;vertical-align:-2px;margin-left:4px;border:1px solid #8797a0;border-radius:2px;overflow:hidden}.region-flag-jpn{background:#fff}.region-flag-jpn:after{content:'';position:absolute;width:7px;height:7px;left:5.5px;top:2.5px;border-radius:50%;background:#bc002d}.region-flag-usa{background:repeating-linear-gradient(to bottom,#b22234 0 1.08px,#fff 1.08px 2.16px)}.region-flag-usa:after{content:'';position:absolute;left:0;top:0;width:9px;height:7.5px;background:#3c3b6e}.meta{color:#9cb7c7;font-size:11px;margin-top:5px}
 #detail{display:none;background:#102536;border:1px solid #3d6b86;padding:18px;margin-bottom:18px}
 .editor-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;background:#102536;border:1px solid #31546a;padding:16px}
 .editor-form label{display:flex;flex-direction:column;gap:5px;color:#a8c1d0;font-size:12px}
@@ -91,7 +91,7 @@ video{display:block;width:100%;max-width:100%;max-height:220px;background:#000}
 <script>
 let games=[],cabinets=[],catalogueSystems=[],mode='all',selected=null;
 const el=id=>document.getElementById(id);
-const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));\nconst regionFlagHtml=region=>{const r=String(region||'').toUpperCase();return r==='JPN'?'<span class="region-flag region-flag-jpn" role="img" aria-label="Japan"></span>':r==='USA'?'<span class="region-flag region-flag-usa" role="img" aria-label="USA"></span>':r==='EXPORT'?' 🌍':''};
 async function init(){
  const gd=await (await fetch('/api/games')).json();games=gd.games||[];catalogueSystems=gd.systems||[];
  const cd=await (await fetch('/api/cabinets')).json();cabinets=cd.cabinets||[];
@@ -128,7 +128,7 @@ function render(){
  const sort=el('sort').value;
  shown.sort((a,b)=>sort==='date'?(b.file_mtime||0)-(a.file_mtime||0):a.name.localeCompare(b.name,undefined,{sensitivity:'base'}));
  el('count').textContent=shown.length+' games · '+(mode==='favourites'?'Favourites':'All enabled games');
- el('games').innerHTML=shown.map((x,i)=>'<article class="game" data-index="'+games.indexOf(x)+'"><div class="art">'+(x.image?'<img loading="lazy" src="/art/'+encodeURIComponent(x.image)+'" onerror="this.remove()">':'NAOMI')+'</div><div class="gname">'+esc(x.name)+(({JPN:' 🇯🇵',USA:' 🇺🇸',EXPORT:' 🌍'})[String(x.region||'').toUpperCase()]||'')+(x.favourite?' ★':'')+'</div><div class="meta">'+esc(x.system)+' · '+esc(x.year)+'<br>'+esc(x.genre)+'</div></article>').join('');
+ el('games').innerHTML=shown.map((x,i)=>'<article class="game" data-index="'+games.indexOf(x)+'"><div class="art">'+(x.image?'<img loading="lazy" src="/art/'+encodeURIComponent(x.image)+'" onerror="this.remove()">':'NAOMI')+'</div><div class="gname">'+esc(x.name)+regionFlagHtml(x.region)+(x.favourite?' ★':'')+'</div><div class="meta">'+esc(x.system)+' · '+esc(x.year)+'<br>'+esc(x.genre)+'</div></article>').join('');
  document.querySelectorAll('[data-index]').forEach(node=>node.onclick=()=>showDetail(games[Number(node.dataset.index)]));
 }
 function populateEditor(){
