@@ -670,7 +670,7 @@ input{flex:1;min-width:220px}button{cursor:pointer;background:#087eb7;border-col
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:16px}
 .card{background:#1b2a35;border:1px solid #344b5a;border-radius:10px;overflow:hidden}
 .art{height:132px;background:#243d4d;display:flex;align-items:center;justify-content:center;color:#9ab5c5}
-.art img{width:100%;height:100%;object-fit:contain}.preview{display:block;width:100%;max-height:180px;background:#000}.info{padding:13px}.name{font-weight:bold;font-size:16px}.meta{color:#a9bdc9;font-size:12px;margin:6px 0 12px}
+.art img{width:100%;height:100%;object-fit:contain}.preview{display:block;width:100%;max-height:180px;background:#000}.info{padding:13px}.name{font-weight:bold;font-size:16px}.region-flag{display:inline-block;position:relative;width:20px;height:14px;vertical-align:-2px;margin-left:4px;border:1px solid #8797a0;border-radius:2px;overflow:hidden}.region-flag-jpn{background:#fff}.region-flag-jpn:after{content:'';position:absolute;width:7px;height:7px;left:5.5px;top:2.5px;border-radius:50%;background:#bc002d}.region-flag-usa{background:repeating-linear-gradient(to bottom,#b22234 0 1.08px,#fff 1.08px 2.16px)}.region-flag-usa:after{content:'';position:absolute;left:0;top:0;width:9px;height:7.5px;background:#3c3b6e}.meta{color:#a9bdc9;font-size:12px;margin:6px 0 12px}
 .card button{width:100%;padding:9px}.panel{background:#1b2a35;border:1px solid #344b5a;border-radius:10px;padding:16px;margin:0 0 18px}
 .muted{color:#a9bdc9}.good{color:#8bd5a5}.bad{color:#ffaaa2}.job{margin-top:12px;line-height:1.5}
 .launch-overlay{position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.78);display:flex;align-items:center;justify-content:center;padding:20px}
@@ -738,7 +738,7 @@ function filterGames(){
   const art=x.image?'<img loading="lazy" src="/art/'+encodeURIComponent(x.image)+'" onerror="this.remove()">':'NAOMI';
   const video=x.video?'<video class="preview" controls preload="none" playsinline src="/video/'+encodeURIComponent(x.video)+'"></video>':'';
   const fav=x.favourite?' ★':'';
-  const regionFlag=({JPN:'🇯🇵',USA:'🇺🇸',EXPORT:'🌍'})[String(x.region||'').toUpperCase()]||'';
+  const region=String(x.region||'').toUpperCase();\n  const regionFlag=region==='JPN'?'<span class="region-flag region-flag-jpn" role="img" aria-label="Japan"></span>':region==='USA'?'<span class="region-flag region-flag-usa" role="img" aria-label="USA"></span>':region==='EXPORT'?' 🌍':'';
   const disabled=x.enabled?'':' · DISABLED';
   const button=x.enabled?'<button data-rom="'+encodeURIComponent(x.filename)+'" '+(cabinets.length?'':'disabled')+'>LOAD GAME</button>':'<button disabled>DISABLED IN CATALOGUE</button>';
   const profile=x.patchable?'<button type="button" data-profile="'+encodeURIComponent(x.filename)+'">PATCH PROFILE</button>':'';
