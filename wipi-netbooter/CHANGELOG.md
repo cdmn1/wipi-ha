@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.11
+
+- Fixed a Classic interface startup regression: EEPROM event handlers are now attached only after the game-detail editor elements are created, allowing the game list to initialize normally.
+
 ## 0.4.10
 
 - Added EEPROM settings access to the Classic interface for Naomi games, matching the Modern interface. The editor uses ROM-declared regions and the simplified settings filter; saved profiles do not modify ROMs or apply settings to the cabinet.
