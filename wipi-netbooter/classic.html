@@ -61,6 +61,7 @@ video{display:block;width:100%;max-width:100%;max-height:220px;background:#000}
 <label>Manufacturer<input id="edit-manufacturer"></label>
 <label>Year<input id="edit-year" inputmode="numeric"></label>
 <label>Genre<input id="edit-genre"></label>
+<label>Region<select id="edit-region"><option value="">Unknown / Not set</option><option value="JPN">JPN</option><option value="USA">USA</option><option value="EXPORT">EXPORT</option></select></label>
 <label>Orientation<select id="edit-orientation"><option value="">Not set</option><option>Horizontal</option><option>Vertical</option></select></label>
 <label>Controls<select id="edit-controls"><option value="">Not set</option><option>Digital (Stick)</option><option>Analog (Stick)</option><option>Analog (Driving)</option><option>Lightgun</option><option>Other</option></select></label>
 <label>Artwork filename<input id="edit-image" placeholder="game.png"></label>
@@ -127,7 +128,7 @@ function render(){
  const sort=el('sort').value;
  shown.sort((a,b)=>sort==='date'?(b.file_mtime||0)-(a.file_mtime||0):a.name.localeCompare(b.name,undefined,{sensitivity:'base'}));
  el('count').textContent=shown.length+' games · '+(mode==='favourites'?'Favourites':'All enabled games');
- el('games').innerHTML=shown.map((x,i)=>'<article class="game" data-index="'+games.indexOf(x)+'"><div class="art">'+(x.image?'<img loading="lazy" src="/art/'+encodeURIComponent(x.image)+'" onerror="this.remove()">':'NAOMI')+'</div><div class="gname">'+esc(x.name)+(x.favourite?' ★':'')+'</div><div class="meta">'+esc(x.system)+' · '+esc(x.year)+'<br>'+esc(x.genre)+'</div></article>').join('');
+ el('games').innerHTML=shown.map((x,i)=>'<article class="game" data-index="'+games.indexOf(x)+'"><div class="art">'+(x.image?'<img loading="lazy" src="/art/'+encodeURIComponent(x.image)+'" onerror="this.remove()">':'NAOMI')+'</div><div class="gname">'+esc(x.name)+(({JPN:' 🇯🇵',USA:' 🇺🇸',EXPORT:' 🌍'})[String(x.region||'').toUpperCase()]||'')+(x.favourite?' ★':'')+'</div><div class="meta">'+esc(x.system)+' · '+esc(x.year)+'<br>'+esc(x.genre)+'</div></article>').join('');
  document.querySelectorAll('[data-index]').forEach(node=>node.onclick=()=>showDetail(games[Number(node.dataset.index)]));
 }
 function populateEditor(){
@@ -147,7 +148,7 @@ function loadEditorEntry(){
  el('edit-description').value=g.description||g.name||'';
  el('edit-system').value=systemsForEditor().includes(g.system)?g.system:'';
  el('edit-manufacturer').value=g.manufacturer||'';el('edit-year').value=g.year||'';
- el('edit-genre').value=g.genre||'';el('edit-orientation').value=g.orientation||'';
+ el('edit-genre').value=g.genre||'';el('edit-region').value=g.region||'';el('edit-orientation').value=g.orientation||'';
  el('edit-controls').value=g.controls||'';
  const romBase=g.filename.replace(/\.bin\.gz$|\.bin$|\.dat$/i,'');
  el('edit-image').value=g.image||(g.catalogued?'':romBase+'.png');
@@ -158,7 +159,7 @@ function loadEditorEntry(){
 async function saveCatalogueEntry(event){
  event.preventDefault();const status=el('editor-status');status.textContent='Saving catalogue…';
  const payload={romname:el('edit-rom').value,description:el('edit-description').value,system:el('edit-system').value,
- manufacturer:el('edit-manufacturer').value,year:el('edit-year').value,genre:el('edit-genre').value,
+ manufacturer:el('edit-manufacturer').value,year:el('edit-year').value,genre:el('edit-genre').value,region:el('edit-region').value,
  orientation:el('edit-orientation').value,controls:el('edit-controls').value,image:el('edit-image').value,
  video:el('edit-video').value,rating:el('edit-rating').value,
  enabled:el('edit-enabled').checked,favourite:el('edit-favourite').checked};
@@ -171,7 +172,7 @@ async function saveCatalogueEntry(event){
 function showDetail(x){
  selected=x;const cabinetOptions=cabinets.map(c=>'<option value="'+esc(c.id)+'">'+esc(c.name)+'</option>').join('');
  el('detail').style.display='block';
- el('detail').innerHTML='<div class="detailrow"><div>'+(x.image?'<img src="/art/'+encodeURIComponent(x.image)+'">':'<div class="art">NAOMI</div>')+(x.video?'<video controls playsinline preload="none" src="/video/'+encodeURIComponent(x.video)+'"></video>':'')+'</div><div><h2>'+esc(x.name)+(x.favourite?' ★':'')+'</h2><table><tr><td>System</td><td>'+esc(x.system)+'</td></tr><tr><td>Manufacturer</td><td>'+esc(x.manufacturer)+'</td></tr><tr><td>Year</td><td>'+esc(x.year)+'</td></tr><tr><td>Genre</td><td>'+esc(x.genre)+'</td></tr><tr><td>Controls</td><td>'+esc(x.controls)+'</td></tr><tr><td>Orientation</td><td>'+esc(x.orientation)+'</td></tr><tr><td>ROM</td><td>'+esc(x.filename)+'</td></tr></table><label class="muted">Load to cabinet </label><select id="detail-cabinet">'+cabinetOptions+'</select><br><button class="launch" id="launch">LAUNCH GAME</button> <button type="button" class="launch" id="profile-game">PATCH PROFILE</button> '+(String(x.system||'').toLowerCase().includes('naomi')?'<button type="button" class="launch" id="classic-eeprom-button">EEPROM SETTINGS</button>':'')+' <button type="button" class="launch" id="edit-game">EDIT CATALOGUE ENTRY</button><div class="muted" id="load-status"></div><div id="detail-patches" class="panel" style="display:none;margin-top:14px"></div></div></div><section id="classic-eeprom-panel" class="panel" style="display:none;margin-top:16px;background:#102536;border:1px solid #3d6b86;padding:16px"><h3 id="classic-eeprom-title">NAOMI EEPROM SETTINGS</h3><p class="muted">Edit the default EEPROM profile for this game. Saving stores the profile only; it does not modify your ROM or apply settings to the cabinet yet.</p><div id="classic-eeprom-region-wrap" hidden style="margin:12px 0">Region: <select id="classic-eeprom-region"></select></div><div id="classic-eeprom-fields"></div><button type="button" class="launch" id="classic-eeprom-save">SAVE SETTINGS PROFILE</button> <button type="button" class="launch" id="classic-eeprom-close">CLOSE</button> <span id="classic-eeprom-status" class="muted"></span></section>';
+ el('detail').innerHTML='<div class="detailrow"><div>'+(x.image?'<img src="/art/'+encodeURIComponent(x.image)+'">':'<div class="art">NAOMI</div>')+(x.video?'<video controls playsinline preload="none" src="/video/'+encodeURIComponent(x.video)+'"></video>':'')+'</div><div><h2>'+esc(x.name)+(({JPN:' 🇯🇵',USA:' 🇺🇸',EXPORT:' 🌍'})[String(x.region||'').toUpperCase()]||'')+(x.favourite?' ★':'')+'</h2><table><tr><td>System</td><td>'+esc(x.system)+'</td></tr><tr><td>Manufacturer</td><td>'+esc(x.manufacturer)+'</td></tr><tr><td>Year</td><td>'+esc(x.year)+'</td></tr><tr><td>Genre</td><td>'+esc(x.genre)+'</td></tr><tr><td>Controls</td><td>'+esc(x.controls)+'</td></tr><tr><td>Orientation</td><td>'+esc(x.orientation)+'</td></tr><tr><td>ROM</td><td>'+esc(x.filename)+'</td></tr></table><label class="muted">Load to cabinet </label><select id="detail-cabinet">'+cabinetOptions+'</select><br><button class="launch" id="launch">LAUNCH GAME</button> <button type="button" class="launch" id="profile-game">PATCH PROFILE</button> '+(String(x.system||'').toLowerCase().includes('naomi')?'<button type="button" class="launch" id="classic-eeprom-button">EEPROM SETTINGS</button>':'')+' <button type="button" class="launch" id="edit-game">EDIT CATALOGUE ENTRY</button><div class="muted" id="load-status"></div><div id="detail-patches" class="panel" style="display:none;margin-top:14px"></div></div></div><section id="classic-eeprom-panel" class="panel" style="display:none;margin-top:16px;background:#102536;border:1px solid #3d6b86;padding:16px"><h3 id="classic-eeprom-title">NAOMI EEPROM SETTINGS</h3><p class="muted">Edit the default EEPROM profile for this game. Saving stores the profile only; it does not modify your ROM or apply settings to the cabinet yet.</p><div id="classic-eeprom-region-wrap" hidden style="margin:12px 0">Region: <select id="classic-eeprom-region"></select></div><div id="classic-eeprom-fields"></div><button type="button" class="launch" id="classic-eeprom-save">SAVE SETTINGS PROFILE</button> <button type="button" class="launch" id="classic-eeprom-close">CLOSE</button> <span id="classic-eeprom-status" class="muted"></span></section>';
  el('classic-eeprom-region').addEventListener('change',async()=>{
  const region=el('classic-eeprom-region').value;
  try{const response=await fetch('/api/games/'+encodeURIComponent(classicEepromFilename)+'/settings?region='+encodeURIComponent(region));const result=await response.json();if(!response.ok)throw new Error(result.error||'Could not read region settings');classicEepromSettings=result.settings;classicEepromRegion=result.region;renderClassicEepromSettings(classicEepromSettings)}
