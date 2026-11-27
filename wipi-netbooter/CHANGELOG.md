@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.13
+
+- Replaced JPN and USA Unicode flag emoji with locally rendered CSS flags so they display consistently on systems without regional-flag emoji support.
+
+
 ## 0.4.12
 
 - Added a manually assigned catalogue region (Unknown, JPN, USA, EXPORT), saved in the ROM catalogue CSV and displayed as a flag beside game titles in both interfaces.
