@@ -195,7 +195,7 @@ PATCH_DEFINITIONS.update({
 CATALOGUE_COLUMNS = [
     "system", "romname", "image", "video", "description", "lcd_description",
     "manufacturer", "year", "genre", "rating", "orientation", "controls",
-    "enabled", "favourite", "openjvs", "openffb", "game_id", "audit_name",
+    "enabled", "favourite", "openjvs", "openffb", "game_id", "audit_name", "region",
 ]
 
 
@@ -330,6 +330,7 @@ def discover_games() -> tuple[list[dict[str, Any]], str | None]:
                     "video": row.get("video", ""),
                     "catalogued": bool(row),
                     "game_id": (row.get("game_id") or "").strip(),
+                    "region": (row.get("region") or "").strip().upper(),
                 })
     except OSError as exc:
         return [], f"Cannot read ROM folder: {exc}"
@@ -737,11 +738,12 @@ function filterGames(){
   const art=x.image?'<img loading="lazy" src="/art/'+encodeURIComponent(x.image)+'" onerror="this.remove()">':'NAOMI';
   const video=x.video?'<video class="preview" controls preload="none" playsinline src="/video/'+encodeURIComponent(x.video)+'"></video>':'';
   const fav=x.favourite?' ★':'';
+  const regionFlag=({JPN:'🇯🇵',USA:'🇺🇸',EXPORT:'🌍'})[String(x.region||'').toUpperCase()]||'';
   const disabled=x.enabled?'':' · DISABLED';
   const button=x.enabled?'<button data-rom="'+encodeURIComponent(x.filename)+'" '+(cabinets.length?'':'disabled')+'>LOAD GAME</button>':'<button disabled>DISABLED IN CATALOGUE</button>';
   const profile=x.patchable?'<button type="button" data-profile="'+encodeURIComponent(x.filename)+'">PATCH PROFILE</button>':'';
   const settings=String(x.system||'').toLowerCase().includes('naomi')?'<button type="button" data-settings="'+encodeURIComponent(x.filename)+'">EEPROM SETTINGS</button>':'';
-  return '<article class="card"><div class="art">'+art+'</div>'+video+'<div class="info"><div class="name">'+esc(x.name)+fav+'</div><div class="meta">'+esc(x.system)+' · '+esc(x.year)+' · '+esc(x.genre)+'<br>'+esc(x.orientation)+' · '+esc(x.controls)+disabled+'</div>'+button+profile+settings+'</div></article>';
+  return '<article class="card"><div class="art">'+art+'</div>'+video+'<div class="info"><div class="name">'+esc(x.name)+(regionFlag?' '+regionFlag:'')+fav+'</div><div class="meta">'+esc(x.system)+' · '+esc(x.year)+' · '+esc(x.genre)+'<br>'+esc(x.orientation)+' · '+esc(x.controls)+disabled+'</div>'+button+profile+settings+'</div></article>';
  }).join('');
  document.querySelectorAll('[data-rom]').forEach(button=>button.addEventListener('click',()=>launchGame(button.dataset.rom)));
  document.querySelectorAll('[data-profile]').forEach(button=>button.addEventListener('click',()=>openPatchProfile(button.dataset.profile)));
@@ -1062,7 +1064,11 @@ def api_update_catalogue():
         "controls": str(body.get("controls", "")).strip(),
         "enabled": "Yes" if body.get("enabled", True) else "No",
         "favourite": "Yes" if body.get("favourite", False) else "No",
+        "region": str(body.get("region", "")).strip().upper(),
     }
+    if values["region"] not in {"", "JPN", "USA", "EXPORT"}:
+        return jsonify(ok=False, error="Region must be blank, JPN, USA, or EXPORT."), 400
+
     for field in ("image", "video"):
         if values[field] and values[field] != str(body.get(field, "")).strip():
             return jsonify(ok=False, error=f"Invalid {field} filename."), 400
@@ -1077,9 +1083,13 @@ def api_update_catalogue():
                 with csv_path.open("r", encoding="utf-8-sig", newline="") as stream:
                     reader = csv.DictReader(stream)
                     if reader.fieldnames:
-                        fieldnames = reader.fieldnames
+                        fieldnames = list(reader.fieldnames)
+                    if "region" not in fieldnames:
+                        fieldnames.append("region")
                     rows = [{key: (row.get(key) or "") for key in fieldnames}
                             for row in reader]
+            if "region" not in fieldnames:
+                fieldnames.append("region")
             existing = next((row for row in rows if row.get("romname", "").strip() == filename), None)
             if existing is None:
                 existing = {key: "" for key in fieldnames}
