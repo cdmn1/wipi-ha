@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.12
+
+- Added a manually assigned catalogue region (Unknown, JPN, USA, EXPORT), saved in the ROM catalogue CSV and displayed as a flag beside game titles in both interfaces.
+- Existing catalogue entries default to Unknown; region metadata does not alter ROM contents, EEPROM settings, or launch behaviour.
+
 ## 0.4.11
 
 - Fixed a Classic interface startup regression: EEPROM event handlers are now attached only after the game-detail editor elements are created, allowing the game list to initialize normally.
