@@ -171,12 +171,70 @@ async function saveCatalogueEntry(event){
 function showDetail(x){
  selected=x;const cabinetOptions=cabinets.map(c=>'<option value="'+esc(c.id)+'">'+esc(c.name)+'</option>').join('');
  el('detail').style.display='block';
- el('detail').innerHTML='<div class="detailrow"><div>'+(x.image?'<img src="/art/'+encodeURIComponent(x.image)+'">':'<div class="art">NAOMI</div>')+(x.video?'<video controls playsinline preload="none" src="/video/'+encodeURIComponent(x.video)+'"></video>':'')+'</div><div><h2>'+esc(x.name)+(x.favourite?' ★':'')+'</h2><table><tr><td>System</td><td>'+esc(x.system)+'</td></tr><tr><td>Manufacturer</td><td>'+esc(x.manufacturer)+'</td></tr><tr><td>Year</td><td>'+esc(x.year)+'</td></tr><tr><td>Genre</td><td>'+esc(x.genre)+'</td></tr><tr><td>Controls</td><td>'+esc(x.controls)+'</td></tr><tr><td>Orientation</td><td>'+esc(x.orientation)+'</td></tr><tr><td>ROM</td><td>'+esc(x.filename)+'</td></tr></table><label class="muted">Load to cabinet </label><select id="detail-cabinet">'+cabinetOptions+'</select><br><button class="launch" id="launch">LAUNCH GAME</button> <button type="button" class="launch" id="profile-game">PATCH PROFILE</button> <button type="button" class="launch" id="edit-game">EDIT CATALOGUE ENTRY</button><div class="muted" id="load-status"></div><div id="detail-patches" class="panel" style="display:none;margin-top:14px"></div></div></div>';
+ el('detail').innerHTML='<div class="detailrow"><div>'+(x.image?'<img src="/art/'+encodeURIComponent(x.image)+'">':'<div class="art">NAOMI</div>')+(x.video?'<video controls playsinline preload="none" src="/video/'+encodeURIComponent(x.video)+'"></video>':'')+'</div><div><h2>'+esc(x.name)+(x.favourite?' ★':'')+'</h2><table><tr><td>System</td><td>'+esc(x.system)+'</td></tr><tr><td>Manufacturer</td><td>'+esc(x.manufacturer)+'</td></tr><tr><td>Year</td><td>'+esc(x.year)+'</td></tr><tr><td>Genre</td><td>'+esc(x.genre)+'</td></tr><tr><td>Controls</td><td>'+esc(x.controls)+'</td></tr><tr><td>Orientation</td><td>'+esc(x.orientation)+'</td></tr><tr><td>ROM</td><td>'+esc(x.filename)+'</td></tr></table><label class="muted">Load to cabinet </label><select id="detail-cabinet">'+cabinetOptions+'</select><br><button class="launch" id="launch">LAUNCH GAME</button> <button type="button" class="launch" id="profile-game">PATCH PROFILE</button> '+(String(x.system||'').toLowerCase().includes('naomi')?'<button type="button" class="launch" id="classic-eeprom-button">EEPROM SETTINGS</button>':'')+' <button type="button" class="launch" id="edit-game">EDIT CATALOGUE ENTRY</button><div class="muted" id="load-status"></div><div id="detail-patches" class="panel" style="display:none;margin-top:14px"></div></div></div><section id="classic-eeprom-panel" class="panel" style="display:none;margin-top:16px;background:#102536;border:1px solid #3d6b86;padding:16px"><h3 id="classic-eeprom-title">NAOMI EEPROM SETTINGS</h3><p class="muted">Edit the default EEPROM profile for this game. Saving stores the profile only; it does not modify your ROM or apply settings to the cabinet yet.</p><div id="classic-eeprom-region-wrap" hidden style="margin:12px 0">Region: <select id="classic-eeprom-region"></select></div><div id="classic-eeprom-fields"></div><button type="button" class="launch" id="classic-eeprom-save">SAVE SETTINGS PROFILE</button> <button type="button" class="launch" id="classic-eeprom-close">CLOSE</button> <span id="classic-eeprom-status" class="muted"></span></section>';
  el('launch').disabled=!cabinets.length||!x.enabled;el('launch').onclick=()=>launch(x.filename);
  el('profile-game').style.display=x.patchable?'inline-block':'none';el('profile-game').onclick=()=>openClassicPatchProfile(x.filename);
+ const eepromButton=el('classic-eeprom-button');if(eepromButton)eepromButton.onclick=()=>openClassicEepromSettings(x.filename);
  el('edit-game').onclick=()=>{setMode('editor');el('edit-rom').value=x.filename;loadEditorEntry();window.scrollTo({top:0,behavior:'smooth'})};
  el('detail').scrollIntoView({behavior:'smooth',block:'start'});
 }
+
+let classicEepromFilename='',classicEepromSettings=null,classicEepromRegion='';
+async function openClassicEepromSettings(filename){
+ classicEepromFilename=filename;classicEepromSettings=null;classicEepromRegion='';
+ const panel=el('classic-eeprom-panel');panel.style.display='block';
+ el('classic-eeprom-title').textContent='EEPROM settings: '+filename;
+ el('classic-eeprom-fields').textContent='Reading Naomi ROM settings…';el('classic-eeprom-status').textContent='';
+ try{
+  const response=await fetch('/api/games/'+encodeURIComponent(filename)+'/settings');
+  const result=await response.json();if(!response.ok)throw new Error(result.error||'Could not read EEPROM settings');
+  classicEepromSettings=result.settings;classicEepromRegion=result.region;
+  const region=el('classic-eeprom-region'),wrap=el('classic-eeprom-region-wrap');
+  region.innerHTML=result.regions.map(r=>'<option value="'+esc(r)+'" '+(r===result.region?'selected':'')+'>'+esc(r)+'</option>').join('');
+  wrap.hidden=result.regions.length<2;renderClassicEepromSettings(classicEepromSettings);
+  panel.scrollIntoView({behavior:'smooth',block:'center'});
+ }catch(error){classicEepromSettings=null;el('classic-eeprom-fields').textContent=error.message}
+}
+function renderClassicEepromSettings(wrapper){
+ const root=el('classic-eeprom-fields'),groups=[['System settings',wrapper.system],['Game settings',wrapper.game]];
+ root.innerHTML=groups.map(([title,group])=>{
+  if(!group||!Array.isArray(group.settings)||!group.settings.length)return '';
+  const visible=group.settings.map((setting,index)=>({setting,index})).filter(({setting})=>{
+   const name=String(setting.name||'');
+   return !(/coin|credit|sequence/i.test(name)&&!/coin\\s*\\/\\s*credit\\s*assignment/i.test(name));
+  });
+  if(!visible.length)return '';
+  return '<h3>'+title+'</h3>'+visible.map(({setting,index})=>{
+   const values=setting.values;if(!values||typeof values!=='object'||setting.read_only===true)return '';
+   let entries=Object.entries(values);
+   if(/coin/i.test(String(setting.name||''))){
+    const one=entries.filter(([value,label])=>/#\\s*0*1\\b/i.test(String(label)));
+    const free=entries.filter(([value,label])=>/free\\s*play/i.test(String(label))||/#\\s*0*27\\b/i.test(String(label)));
+    const first=one.length?one:[entries[0]].filter(Boolean),last=free.length?free:(entries.length>=27?[entries[entries.length-1]]:[]);
+    entries=[...new Map([...first,...last].map(entry=>[entry[0],entry])).values()];
+   }
+   const options=entries.map(([value,label])=>'<option value="'+esc(value)+'" '+(Number(value)===Number(setting.current)?'selected':'')+'>'+esc(label)+'</option>').join('');
+   return '<label style="display:block;margin:12px 0"><strong>'+esc(setting.name||('Setting '+(index+1)))+'</strong><select style="display:block;width:100%;margin-top:5px" data-setting-group="'+title.split(' ')[0].toLowerCase()+'" data-setting-index="'+index+'">'+options+'</select></label>';
+  }).join('');
+ }).join('')||'<p class="muted">No editable EEPROM settings were found for this game.</p>';
+}
+el('classic-eeprom-region').addEventListener('change',async()=>{
+ const region=el('classic-eeprom-region').value;
+ try{const response=await fetch('/api/games/'+encodeURIComponent(classicEepromFilename)+'/settings?region='+encodeURIComponent(region));const result=await response.json();if(!response.ok)throw new Error(result.error||'Could not read region settings');classicEepromSettings=result.settings;classicEepromRegion=result.region;renderClassicEepromSettings(classicEepromSettings)}
+ catch(error){el('classic-eeprom-status').textContent='Error: '+error.message}
+});
+el('classic-eeprom-save').addEventListener('click',async()=>{
+ if(!classicEepromSettings)return;
+ for(const select of document.querySelectorAll('#classic-eeprom-fields select[data-setting-index]')){
+  const group=select.dataset.settingGroup==='system'?'system':'game',index=Number(select.dataset.settingIndex);
+  classicEepromSettings[group].settings[index].current=Number(select.value);
+ }
+ const status=el('classic-eeprom-status');status.textContent='Saving profile…';
+ try{const response=await fetch('/api/games/'+encodeURIComponent(classicEepromFilename)+'/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({region:classicEepromRegion,settings:classicEepromSettings})});const result=await response.json();if(!response.ok||!result.ok)throw new Error(result.error||'Could not save settings');status.textContent=result.message}
+ catch(error){status.textContent='Error: '+error.message}
+});
+el('classic-eeprom-close').addEventListener('click',()=>{el('classic-eeprom-panel').style.display='none'});
+
 async function openClassicPatchProfile(filename){
  const panel=el('detail-patches');panel.style.display='block';panel.textContent='Checking available patches…';
  try{
