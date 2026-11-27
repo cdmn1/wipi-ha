@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.14
+
+- Fixed a Classic interface JavaScript syntax error introduced by the region flag rendering update; the game list and game detail now use the same local flag graphics.
+
+
 ## 0.4.13
 
 - Replaced JPN and USA Unicode flag emoji with locally rendered CSS flags so they display consistently on systems without regional-flag emoji support.
